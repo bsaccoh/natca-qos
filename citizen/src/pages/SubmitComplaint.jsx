@@ -14,6 +14,7 @@ import { collectDiagnostics } from '../utils/diagnostics.js';
 import { runQuickSpeedTest }  from '../utils/speedTest.js';
 import SpeedIcon              from '@mui/icons-material/Speed';
 import LocationOnIcon         from '@mui/icons-material/LocationOn';
+import GaugeComponent         from 'react-gauge-component';
 
 const STEPS_AUTH  = ['Category', 'Details', 'Location', 'Review & Submit'];
 const STEPS_GUEST = ['Category', 'Details', 'Location', 'Contact Info', 'Review & Submit'];
@@ -175,7 +176,48 @@ function StepContact({ form, set }) {
   );
 }
 
-function DiagnosticsPanel({ diag, loading, onRunSpeedTest, speedTesting, onRequestLocation }) {
+function SpeedGauge({ value, phase, done }) {
+  return (
+    <Box sx={{
+      textAlign: 'center',
+      bgcolor: (t) => t.palette.mode === 'dark' ? 'grey.900' : 'primary.dark',
+      color: '#fff',
+      borderRadius: 2,
+      p: 2,
+      mb: 1.5,
+    }}>
+      <Box sx={{ width: '100%', maxWidth: 260, mx: 'auto' }}>
+        <GaugeComponent
+          value={Math.min(value, 100)}
+          type="semicircle"
+          labels={{
+            valueLabel: {
+              formatTextValue: (v) => `${v.toFixed(1)} Mbps`,
+              style: { fill: '#fff', textShadow: 'none', fontSize: '30px', fontWeight: 700 },
+            },
+            tickLabels: {
+              type: 'outer',
+              ticks: [{ value: 20 }, { value: 50 }, { value: 80 }],
+              defaultTickValueConfig: { style: { fill: '#fff', fontSize: '9px' } },
+            },
+          }}
+          arc={{
+            colorArray: ['#ea4228', '#f5cd19', '#5be12c'],
+            subArcs: [{ limit: 20 }, { limit: 50 }, { limit: 100 }],
+            padding: 0.02,
+            width: 0.18,
+          }}
+          pointer={{ type: 'needle', elastic: true, animationDelay: 0, color: '#fff' }}
+        />
+      </Box>
+      <Typography variant="caption" sx={{ letterSpacing: 1, textTransform: 'uppercase', opacity: 0.85 }}>
+        {phase ? `Testing ${phase}…` : done ? 'Test Complete' : 'Speed Test'}
+      </Typography>
+    </Box>
+  );
+}
+
+function DiagnosticsPanel({ diag, loading, onRunSpeedTest, speedTesting, speedPhase, gaugeValue, onRequestLocation }) {
   const geoDenied = diag?.geo?.reason === 'denied';
   const sp = diag?.speedTest;
 
@@ -198,6 +240,14 @@ function DiagnosticsPanel({ diag, loading, onRunSpeedTest, speedTesting, onReque
         >
           Grant location access for faster complaint resolution.
         </Alert>
+      )}
+
+      {(speedTesting || diag?.speedTest) && (
+        <SpeedGauge
+          value={speedTesting ? gaugeValue : (diag?.speedTest?.downloadMbps ?? 0)}
+          phase={speedPhase}
+          done={!speedTesting && !!diag?.speedTest}
+        />
       )}
 
       {!diag && !loading && (
@@ -261,7 +311,7 @@ function DiagnosticsPanel({ diag, loading, onRunSpeedTest, speedTesting, onReque
   );
 }
 
-function StepReview({ form, operators, categories, isGuest, diag, diagLoading, onRunSpeedTest, speedTesting, onRequestLocation }) {
+function StepReview({ form, operators, categories, isGuest, diag, diagLoading, onRunSpeedTest, speedTesting, speedPhase, gaugeValue, onRequestLocation }) {
   const op  = operators.find((o) => String(o.operator_id) === String(form.operatorId));
   const cat = categories.find((c) => String(c.category_id) === String(form.categoryId));
 
@@ -301,6 +351,8 @@ function StepReview({ form, operators, categories, isGuest, diag, diagLoading, o
         loading={diagLoading}
         onRunSpeedTest={onRunSpeedTest}
         speedTesting={speedTesting}
+        speedPhase={speedPhase}
+        gaugeValue={gaugeValue}
         onRequestLocation={onRequestLocation}
       />
     </Stack>
@@ -327,14 +379,21 @@ export default function SubmitComplaint() {
   const [diag,       setDiag]       = useState(null);
   const [diagLoading,setDiagLoading]= useState(false);
   const [speedTesting, setSpeedTesting] = useState(false);
+  const [speedPhase,   setSpeedPhase]   = useState('');
+  const [gaugeValue,   setGaugeValue]   = useState(0);
 
   const runSpeedTest = async () => {
     setSpeedTesting(true);
+    setGaugeValue(0);
     try {
-      const sp = await runQuickSpeedTest();
+      const sp = await runQuickSpeedTest({
+        onPhase: setSpeedPhase,
+        onGauge: setGaugeValue,
+      });
       setDiag((d) => (d ? { ...d, speedTest: sp } : d));
     } finally {
       setSpeedTesting(false);
+      setSpeedPhase('');
     }
   };
 
@@ -473,6 +532,7 @@ export default function SubmitComplaint() {
       form={form} operators={operators} categories={categories} isGuest={isGuest}
       diag={diag} diagLoading={diagLoading}
       onRunSpeedTest={runSpeedTest} speedTesting={speedTesting}
+      speedPhase={speedPhase} gaugeValue={gaugeValue}
       onRequestLocation={requestLocation}
     />,
   ];

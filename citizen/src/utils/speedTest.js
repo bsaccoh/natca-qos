@@ -43,9 +43,24 @@ export async function measureUpload(payloadMB = 2) {
   }
 }
 
-export async function runQuickSpeedTest() {
+export async function runQuickSpeedTest({ onPhase, onGauge } = {}) {
+  onPhase?.('Ping');
+  onGauge?.(0);
   const { pingMs, jitterMs } = await measurePing(3);
+
+  onPhase?.('Download');
+  // Animate a wobbly needle while download is in flight
+  const dlInterval = setInterval(() => onGauge?.(Math.random() * 40 + 10), 250);
   const downloadMbps = await measureDownload();
-  const uploadMbps   = await measureUpload(1);
+  clearInterval(dlInterval);
+  onGauge?.(downloadMbps ?? 0);
+
+  onPhase?.('Upload');
+  const ulInterval = setInterval(() => onGauge?.(Math.random() * 15 + 3), 250);
+  const uploadMbps = await measureUpload(1);
+  clearInterval(ulInterval);
+  onGauge?.(downloadMbps ?? 0); // rest gauge back to the download reading
+
+  onPhase?.('');
   return { pingMs, jitterMs, downloadMbps, uploadMbps, measured_at: new Date().toISOString() };
 }
