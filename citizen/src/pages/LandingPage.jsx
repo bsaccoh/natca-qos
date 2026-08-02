@@ -404,10 +404,10 @@ export default function LandingPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const services = [
-    { icon: <ReportProblemIcon />, title: 'File a Complaint', desc: 'Report network, billing or service quality issues', to: user ? '/submit' : '/register' },
+    { icon: <ReportProblemIcon />, title: 'File a Complaint', desc: 'Report network, billing or service quality issues', to: '/submit' },
     { icon: <SearchIcon />, title: 'Track Status', desc: 'Follow your case with a reference number', to: '/track' },
     { icon: <VerifiedUserIcon />, title: 'KYC / SIM Registration', desc: 'Verify your identity and register your SIM', to: user ? '/kyc' : '/register' },
-    { icon: <PhoneAndroidIcon />, title: 'Mobile Access', desc: 'Available on the NatCA citizen mobile app', to: user ? '/submit' : '/register' },
+    { icon: <PhoneAndroidIcon />, title: 'Mobile Access', desc: 'Available on the NatCA citizen mobile app', to: '/submit' },
   ];
 
   const displayRights = rightsItems.length > 0 ? rightsItems : DEFAULT_RIGHTS;
@@ -464,9 +464,9 @@ export default function LandingPage() {
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <Button variant="contained" size="large" endIcon={<ArrowForwardIcon />}
-                  onClick={() => navigate(user ? '/submit' : '/register')}
+                  onClick={() => navigate('/submit')}
                   sx={{ boxShadow: `0 8px 24px ${alpha(BRAND.primary, 0.5)}` }}>
-                  {user ? 'Submit a Complaint' : 'Get Started'}
+                  Submit a Complaint
                 </Button>
                 <Button variant="outlined" size="large" onClick={() => scrollTo('about')}
                   sx={{ color: '#fff', borderColor: alpha('#fff', 0.4), '&:hover': { borderColor: '#fff', bgcolor: alpha('#fff', 0.08) } }}>
