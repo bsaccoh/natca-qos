@@ -54,11 +54,30 @@ export async function withTransaction(cb) {
   }
 }
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export async function waitForDb(attempts = 15, delayMs = 3000) {
   for (let i = 1; i <= attempts; i++) {
     try {
       await pool.query('SELECT 1');
       console.log('✓ Database connected');
+
+      // Check if schema exists (roles table)
+      const { rows } = await pool.query(
+        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'roles')"
+      );
+      if (!rows[0]?.exists) {
+        console.log('⚙ Tables missing — Running database schema & seed scripts...');
+        const schemaSql = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf-8');
+        const seedSql   = fs.readFileSync(path.join(__dirname, '../db/seed.sql'), 'utf-8');
+        await pool.query(schemaSql);
+        await pool.query(seedSql);
+        console.log('✓ Database schema and seed data initialized successfully');
+      }
       return;
     } catch (err) {
       console.log(`DB not ready (attempt ${i}/${attempts}): ${err.message}`);
