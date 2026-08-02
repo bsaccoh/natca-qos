@@ -40,13 +40,13 @@ export async function listNotifications(userId, { limit = 30, unreadOnly = false
      LIMIT :limit`,
     { userId, limit: Number(limit) }
   );
-  const [{ total, unread }] = await query(
+  const [res] = await query(
     `SELECT COUNT(*) AS total,
-            SUM(CASE WHEN is_read = FALSE THEN 1 ELSE 0 END) AS unread
+            COALESCE(SUM(CASE WHEN is_read = FALSE THEN 1 ELSE 0 END), 0) AS unread
      FROM notifications WHERE user_id = :userId`,
     { userId }
   );
-  return { rows, total: Number(total), unread: Number(unread) };
+  return { rows: rows || [], total: Number(res?.total || 0), unread: Number(res?.unread || 0) };
 }
 
 /**
@@ -77,9 +77,9 @@ export async function markAllRead(userId) {
  * Unread count only — lightweight endpoint for polling.
  */
 export async function unreadCount(userId) {
-  const [row] = await query(
+  const row = await queryOne(
     `SELECT COUNT(*) AS unread FROM notifications WHERE user_id = :userId AND is_read = FALSE`,
     { userId }
   );
-  return Number(row.unread);
+  return Number(row?.unread || 0);
 }

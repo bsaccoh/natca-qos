@@ -280,12 +280,12 @@ export async function getSummary({ operatorId } = {}) {
 
   const [counts] = await query(
     `SELECT COUNT(*) AS total,
-            SUM(CASE WHEN status = 'NEW' THEN 1 ELSE 0 END)          AS new_count,
-            SUM(CASE WHEN status = 'UNDER_REVIEW' THEN 1 ELSE 0 END) AS under_review,
-            SUM(CASE WHEN status = 'RESOLVED' THEN 1 ELSE 0 END)     AS resolved,
-            SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END)       AS closed,
-            SUM(CASE WHEN severity = 'CRITICAL' THEN 1 ELSE 0 END)   AS critical,
-            SUM(CASE WHEN sla_deadline < NOW() AND status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS sla_breached
+            COALESCE(SUM(CASE WHEN status = 'NEW' THEN 1 ELSE 0 END), 0)          AS new_count,
+            COALESCE(SUM(CASE WHEN status = 'UNDER_REVIEW' THEN 1 ELSE 0 END), 0) AS under_review,
+            COALESCE(SUM(CASE WHEN status = 'RESOLVED' THEN 1 ELSE 0 END), 0)     AS resolved,
+            COALESCE(SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END), 0)       AS closed,
+            COALESCE(SUM(CASE WHEN severity = 'CRITICAL' THEN 1 ELSE 0 END), 0)   AS critical,
+            COALESCE(SUM(CASE WHEN sla_deadline < NOW() AND status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END), 0) AS sla_breached
      FROM complaints ${cond}`,
     params
   );
@@ -321,7 +321,17 @@ export async function getSummary({ operatorId } = {}) {
     params
   ).catch(() => []);
 
-  return { counts: { ...counts, total: Number(counts.total) }, byStatus, byOperator, byCategory, trend };
+  const formattedCounts = {
+    total:        Number(counts?.total || 0),
+    new_count:    Number(counts?.new_count || 0),
+    under_review: Number(counts?.under_review || 0),
+    resolved:     Number(counts?.resolved || 0),
+    closed:       Number(counts?.closed || 0),
+    critical:     Number(counts?.critical || 0),
+    sla_breached: Number(counts?.sla_breached || 0),
+  };
+
+  return { counts: formattedCounts, byStatus: byStatus || [], byOperator: byOperator || [], byCategory: byCategory || [], trend: trend || [] };
 }
 
 export async function logTimeline(complaintId, { eventType, oldValue, newValue, note, isPublic = false, actorId, actorName }) {
