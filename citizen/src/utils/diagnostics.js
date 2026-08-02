@@ -2,30 +2,31 @@
 // Radio-level details (RSRP, band, cell ID) are not exposed to web pages —
 // those require the native app.
 
-const GEO_TIMEOUT_MS = 8000;
 const PING_TIMEOUT_MS = 5000;
+
+function tryGeoOnce(opts) {
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({
+        available: true,
+        latitude:  pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy_m: pos.coords.accuracy,
+      }),
+      (err) => resolve({ available: false, reason: err.code === 1 ? 'denied' : (err.code === 3 ? 'timeout' : err.message) }),
+      opts,
+    );
+  });
+}
 
 async function getGeo() {
   if (!('geolocation' in navigator)) return { available: false, reason: 'unsupported' };
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve({ available: false, reason: 'timeout' }), GEO_TIMEOUT_MS);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        clearTimeout(timer);
-        resolve({
-          available: true,
-          latitude:  pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy_m: pos.coords.accuracy,
-        });
-      },
-      (err) => {
-        clearTimeout(timer);
-        resolve({ available: false, reason: err.code === 1 ? 'denied' : err.message });
-      },
-      { enableHighAccuracy: true, timeout: GEO_TIMEOUT_MS, maximumAge: 0 }
-    );
-  });
+  // Fast pass: coarse cell/WiFi fix, allow slightly stale reading (60s)
+  const coarse = await tryGeoOnce({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+  if (coarse.available) return coarse;
+  if (coarse.reason === 'denied') return coarse;
+  // Slow pass: real GPS lock — up to 25s
+  return tryGeoOnce({ enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
 }
 
 function getConnection() {
