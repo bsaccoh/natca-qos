@@ -26,6 +26,11 @@ export function createApp() {
   // Attach Socket.io instance for use in routes
   app.set('io', io);
 
+  // Root health check
+  app.get('/', (_req, res) => {
+    res.json({ status: 'ok', message: 'NatCA CMS & QoE API is online' });
+  });
+
   // Versioned API
   app.use('/api/v1', apiRoutes);
 
