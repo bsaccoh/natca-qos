@@ -31,6 +31,14 @@ export function createApp() {
     res.json({ status: 'ok', message: 'NatCA CMS & QoE API is online' });
   });
 
+  // Prevent stale JSON on CDNs / mobile browsers
+  app.use('/api', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    next();
+  });
+
   // Versioned API
   app.use('/api/v1', apiRoutes);
 
