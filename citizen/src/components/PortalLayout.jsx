@@ -77,9 +77,15 @@ export default function PortalLayout({ children }) {
               </Button>
             </Stack>
           ) : (
-            <Stack direction="row" spacing={1}>
-              <Button size="small" variant="outlined" component={RouterLink} to="/login">Login</Button>
-              <Button size="small" variant="contained" component={RouterLink} to="/register">Sign Up</Button>
+            <Stack direction="row" spacing={0.5}>
+              <Button size="small" variant="text" component={RouterLink} to="/login"
+                sx={{ px: { xs: 1, sm: 2 }, minWidth: 0, fontWeight: 600 }}>
+                Login
+              </Button>
+              <Button size="small" variant="contained" component={RouterLink} to="/register"
+                sx={{ px: { xs: 1.5, sm: 2 }, minWidth: 0 }}>
+                Sign Up
+              </Button>
             </Stack>
           )}
         </Toolbar>
