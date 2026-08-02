@@ -44,6 +44,9 @@ router.post('/submit', optionalAuth, asyncHandler(async (req, res) => {
     transactionRef:       z.string().optional(),
     disputedAmount:       z.number().optional(),
     transactionDate:      z.string().optional(),
+    contactName:          z.string().optional(),
+    contactPhone:         z.string().optional(),
+    contactEmail:         z.string().email().optional(),
     source:               z.string().optional(),
   }).parse(req.body);
 

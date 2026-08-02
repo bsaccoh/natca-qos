@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate }         from 'react-router-dom';
+import { useNavigate, Link }   from 'react-router-dom';
 import {
   Box, Button, Container, Paper, Stack, Stepper, Step, StepLabel,
   Typography, Alert, CircularProgress, TextField, MenuItem,
@@ -7,10 +7,13 @@ import {
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
+import PersonOutlineIcon      from '@mui/icons-material/PersonOutline';
+import LoginIcon              from '@mui/icons-material/Login';
 import { post, get }          from '../api/client.js';
 import { useAuth }            from '../auth/AuthContext.jsx';
 
-const STEPS = ['Category', 'Details', 'Location', 'Review & Submit'];
+const STEPS_AUTH  = ['Category', 'Details', 'Location', 'Review & Submit'];
+const STEPS_GUEST = ['Category', 'Details', 'Location', 'Contact Info', 'Review & Submit'];
 
 const ISSUE_TYPES = [
   'CALL_DROP', 'NO_SIGNAL', 'SLOW_INTERNET', 'NETWORK_OUTAGE', 'SMS_FAILURE',
@@ -78,7 +81,6 @@ function StepDetails({ form, set }) {
         helperText={`${form.description.length}/2000 characters`}
         inputProps={{ maxLength: 2000 }}
       />
-      {/* Billing fields — shown if issue relates to billing */}
       {['BILLING_ERROR','UNAUTHORIZED_CHARGE'].includes(form.issueType) && (
         <>
           <Divider />
@@ -130,7 +132,47 @@ function StepLocation({ form, set, districts, chiefdoms }) {
   );
 }
 
-function StepReview({ form, operators, categories }) {
+function StepContact({ form, set }) {
+  return (
+    <Stack spacing={2.5}>
+      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', p: 2, bgcolor: 'info.main', color: 'info.contrastText', borderRadius: 1.5 }}>
+        <PersonOutlineIcon sx={{ mt: 0.25, flexShrink: 0 }} />
+        <Box>
+          <Typography variant="subtitle2" fontWeight={700}>How can NatCA reach you?</Typography>
+          <Typography variant="body2" sx={{ opacity: 0.92 }}>
+            Providing your contact details lets our team follow up on your complaint. At least one contact method is required.
+          </Typography>
+        </Box>
+      </Box>
+      <TextField
+        label="Full Name *"
+        value={form.contactName}
+        onChange={set('contactName')}
+        fullWidth required
+        placeholder="Your full name"
+      />
+      <TextField
+        label="Phone Number"
+        value={form.contactPhone}
+        onChange={set('contactPhone')}
+        fullWidth
+        placeholder="+232 76 000 000"
+        helperText="Required if no email provided"
+      />
+      <TextField
+        label="Email Address"
+        type="email"
+        value={form.contactEmail}
+        onChange={set('contactEmail')}
+        fullWidth
+        placeholder="you@example.com"
+        helperText="Required if no phone provided"
+      />
+    </Stack>
+  );
+}
+
+function StepReview({ form, operators, categories, isGuest }) {
   const op  = operators.find((o) => String(o.operator_id) === String(form.operatorId));
   const cat = categories.find((c) => String(c.category_id) === String(form.categoryId));
 
@@ -141,6 +183,11 @@ function StepReview({ form, operators, categories }) {
     { l: 'Severity',   v: form.severity },
     { l: 'District',   v: form.districtId ? 'Selected' : '—' },
     { l: 'Area',       v: form.areaDetail || '—' },
+    ...(isGuest ? [
+      { l: 'Contact Name',  v: form.contactName || '—' },
+      { l: 'Phone',         v: form.contactPhone || '—' },
+      { l: 'Email',         v: form.contactEmail || '—' },
+    ] : []),
   ];
 
   return (
@@ -167,11 +214,15 @@ function StepReview({ form, operators, categories }) {
 export default function SubmitComplaint() {
   const { user }  = useAuth();
   const navigate  = useNavigate();
-  const [step, setStep]         = useState(0);
-  const [loading, setLoading]   = useState(false);
-  const [err, setErr]           = useState('');
-  const [submitted, setSubmitted] = useState(null); // { complaint_ref, status }
-  const [copied, setCopied]     = useState(false);
+  const isGuest   = !user;
+
+  const STEPS = isGuest ? STEPS_GUEST : STEPS_AUTH;
+
+  const [step, setStep]           = useState(0);
+  const [loading, setLoading]     = useState(false);
+  const [err, setErr]             = useState('');
+  const [submitted, setSubmitted] = useState(null);
+  const [copied, setCopied]       = useState(false);
 
   const [operators,  setOperators]  = useState([]);
   const [categories, setCategories] = useState([]);
@@ -183,6 +234,7 @@ export default function SubmitComplaint() {
     description: '',
     billingSubCategory: '', transactionRef: '', disputedAmount: '', transactionDate: '',
     districtId: '', chiefdomId: '', areaDetail: '',
+    contactName: '', contactPhone: '', contactEmail: '',
   });
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -198,9 +250,17 @@ export default function SubmitComplaint() {
     get(`/districts/${form.districtId}/chiefdoms`).then((r) => setChiefdoms(r.data || [])).catch(() => setChiefdoms([]));
   }, [form.districtId]);
 
+  // Resolve which logical step index maps to which step name, accounting for the extra guest step
+  const STEP_CATEGORY = 0;
+  const STEP_DETAILS  = 1;
+  const STEP_LOCATION = 2;
+  const STEP_CONTACT  = isGuest ? 3 : -1;
+  const STEP_REVIEW   = isGuest ? 4 : 3;
+
   const canNext = () => {
-    if (step === 0) return !!form.operatorId && !!form.issueType;
-    if (step === 1) return form.description.trim().length >= 10;
+    if (step === STEP_CATEGORY) return !!form.operatorId && !!form.issueType;
+    if (step === STEP_DETAILS)  return form.description.trim().length >= 10;
+    if (step === STEP_CONTACT)  return !!form.contactName.trim() && (!!form.contactPhone.trim() || !!form.contactEmail.trim());
     return true;
   };
 
@@ -220,10 +280,13 @@ export default function SubmitComplaint() {
         transactionRef:     form.transactionRef     || undefined,
         disputedAmount:     form.disputedAmount      ? Number(form.disputedAmount) : undefined,
         transactionDate:    form.transactionDate     || undefined,
+        contactName:        isGuest ? form.contactName  || undefined : undefined,
+        contactPhone:       isGuest ? form.contactPhone || undefined : undefined,
+        contactEmail:       isGuest ? form.contactEmail || undefined : undefined,
         source:             'WEB',
         userId:             user?.userId,
       });
-      setSubmitted(res.data);  // post() → axios response.data → { data: { complaint_ref, status } }
+      setSubmitted(res.data);
     } catch (ex) {
       setErr(ex.response?.data?.error || 'Submission failed. Please try again.');
     } finally { setLoading(false); }
@@ -251,6 +314,12 @@ export default function SubmitComplaint() {
           </Paper>
           {copied && <Typography variant="caption" color="success.main" display="block" sx={{ mb: 2 }}>Copied!</Typography>}
           <Chip label={submitted.status} color="warning" sx={{ mb: 3 }} />
+          {isGuest && (
+            <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
+              <strong>Save your reference number.</strong> Without an account you will need it to track your complaint.
+              You can also <Link to="/register" style={{ fontWeight: 600 }}>create a free account</Link> to track complaints automatically.
+            </Alert>
+          )}
           <Stack spacing={1.5} direction={{ xs: 'column', sm: 'row' }} justifyContent="center">
             <Button variant="contained" onClick={() => navigate(`/track?ref=${ref}`)}>Track This Complaint</Button>
             <Button variant="outlined" onClick={() => navigate('/')}>Back to Home</Button>
@@ -261,18 +330,34 @@ export default function SubmitComplaint() {
   }
 
   const stepComponents = [
-    <StepCategory form={form} set={set} categories={categories} operators={operators} />,
-    <StepDetails  form={form} set={set} />,
-    <StepLocation form={form} set={set} districts={districts} chiefdoms={chiefdoms} />,
-    <StepReview   form={form} operators={operators} categories={categories} />,
+    <StepCategory key="cat"  form={form} set={set} categories={categories} operators={operators} />,
+    <StepDetails  key="det"  form={form} set={set} />,
+    <StepLocation key="loc"  form={form} set={set} districts={districts} chiefdoms={chiefdoms} />,
+    ...(isGuest ? [<StepContact key="con" form={form} set={set} />] : []),
+    <StepReview   key="rev"  form={form} operators={operators} categories={categories} isGuest={isGuest} />,
   ];
 
   return (
     <Container maxWidth="sm" sx={{ py: 5 }}>
       <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5 }}>Submit a Complaint</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: isGuest ? 2 : 3 }}>
         Report telecom service issues to NatCA for investigation and resolution
       </Typography>
+
+      {isGuest && (
+        <Alert
+          severity="info"
+          icon={<LoginIcon fontSize="inherit" />}
+          sx={{ mb: 3 }}
+          action={
+            <Button color="inherit" size="small" component={Link} to="/login">
+              Sign in
+            </Button>
+          }
+        >
+          Already have an account? Sign in to track your complaints automatically.
+        </Alert>
+      )}
 
       <Stepper activeStep={step} alternativeLabel sx={{ mb: 4 }}>
         {STEPS.map((l) => <Step key={l}><StepLabel>{l}</StepLabel></Step>)}

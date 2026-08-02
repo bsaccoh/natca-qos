@@ -31,6 +31,7 @@ export async function submitComplaint({
   userId, operatorId, categoryId, issueType, severity = 'MEDIUM', priority = 'NORMAL',
   districtId, chiefdomId, areaDetail, latitude, longitude, description,
   billingSubCategory, transactionRef, disputedAmount, transactionDate,
+  contactName, contactPhone, contactEmail,
   source = 'WEB', ip,
 }) {
   if (!issueType) throw ApiError.badRequest('issueType is required');
@@ -45,12 +46,14 @@ export async function submitComplaint({
        district_id, chiefdom_id, area_detail, latitude, longitude, description,
        sla_hours, sla_deadline,
        billing_sub_category, transaction_ref, disputed_amount, transaction_date,
+       contact_name, contact_phone, contact_email,
        source, ip_address
      ) VALUES (
        :ref, :userId, :operatorId, :categoryId, :issueType, :severity, :priority,
        :districtId, :chiefdomId, :areaDetail, :latitude, :longitude, :description,
        :slaHours, :slaDeadline,
        :billingSubCategory, :transactionRef, :disputedAmount, :transactionDate,
+       :contactName, :contactPhone, :contactEmail,
        :source, :ip
      ) RETURNING complaint_id, complaint_ref, status, created_at`,
     {
@@ -62,6 +65,7 @@ export async function submitComplaint({
       slaHours, slaDeadline,
       billingSubCategory: billingSubCategory || null, transactionRef: transactionRef || null,
       disputedAmount: disputedAmount || null, transactionDate: transactionDate || null,
+      contactName: contactName || null, contactPhone: contactPhone || null, contactEmail: contactEmail || null,
       source, ip: ip || null,
     }
   );

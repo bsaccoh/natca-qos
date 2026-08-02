@@ -41,9 +41,7 @@ export default function App() {
         <Route path="/ussd"  element={<PortalLayout><UssdDirectory /></PortalLayout>} />
 
         {/* Protected portal pages */}
-        <Route path="/submit" element={
-          <Protected><PortalLayout><SubmitComplaint /></PortalLayout></Protected>
-        } />
+        <Route path="/submit" element={<PortalLayout><SubmitComplaint /></PortalLayout>} />
         <Route path="/my-complaints" element={
           <Protected><PortalLayout><MyComplaints /></PortalLayout></Protected>
         } />

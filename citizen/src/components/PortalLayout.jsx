@@ -19,7 +19,7 @@ import { useAuth }       from '../auth/AuthContext.jsx';
 
 const LINKS = [
   { label: 'Home',             to: '/',              icon: <HomeIcon fontSize="small" />,          public: true  },
-  { label: 'Submit Complaint', to: '/submit',        icon: <ReportProblemIcon fontSize="small" />, public: false },
+  { label: 'Submit Complaint', to: '/submit',        icon: <ReportProblemIcon fontSize="small" />, public: true  },
   { label: 'Track Complaint',  to: '/track',         icon: <SearchIcon fontSize="small" />,        public: true  },
   { label: 'My Complaints',    to: '/my-complaints', icon: <ListAltIcon fontSize="small" />,       public: false },
   { label: 'KYC / SIM Reg',   to: '/kyc',           icon: <VerifiedUserIcon fontSize="small" />,  public: false },
