@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link }   from 'react-router-dom';
+import { useNavigate }         from 'react-router-dom';
 import {
   Box, Button, Container, Paper, Stack, Stepper, Step, StepLabel,
   Typography, Alert, CircularProgress, TextField, MenuItem,
@@ -8,7 +8,6 @@ import {
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
 import PersonOutlineIcon      from '@mui/icons-material/PersonOutline';
-import LoginIcon              from '@mui/icons-material/Login';
 import { post, get }          from '../api/client.js';
 import { useAuth }            from '../auth/AuthContext.jsx';
 
@@ -343,21 +342,6 @@ export default function SubmitComplaint() {
       <Typography variant="body2" color="text.secondary" sx={{ mb: isGuest ? 2 : 3 }}>
         Report telecom service issues to NatCA for investigation and resolution
       </Typography>
-
-      {isGuest && (
-        <Alert
-          severity="info"
-          icon={<LoginIcon fontSize="inherit" />}
-          sx={{ mb: 3 }}
-          action={
-            <Button color="inherit" size="small" component={Link} to="/login">
-              Sign in
-            </Button>
-          }
-        >
-          Already have an account? Sign in to track your complaints automatically.
-        </Alert>
-      )}
 
       <Stepper activeStep={step} alternativeLabel sx={{ mb: 4 }}>
         {STEPS.map((l) => <Step key={l}><StepLabel>{l}</StepLabel></Step>)}
