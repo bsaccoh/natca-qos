@@ -137,6 +137,9 @@ CREATE TABLE IF NOT EXISTS complaints (
   is_duplicate          BOOLEAN      NOT NULL DEFAULT FALSE,
   citizen_rating        SMALLINT     CHECK (citizen_rating BETWEEN 1 AND 5),
   citizen_feedback      TEXT,
+  contact_name          VARCHAR(150),
+  contact_phone         VARCHAR(30),
+  contact_email         VARCHAR(200),
   created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -354,3 +357,8 @@ CREATE INDEX IF NOT EXISTS idx_kyc_status          ON kyc_submissions(status);
 CREATE INDEX IF NOT EXISTS idx_notifications_user  ON notifications(user_id) WHERE is_read = FALSE;
 CREATE INDEX IF NOT EXISTS idx_timeline_complaint  ON complaint_timeline(complaint_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user       ON sessions(user_id);
+
+-- ── Migrations (safe to re-run — adds columns only if missing) ───────────
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_name  VARCHAR(150);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(30);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_email VARCHAR(200);
