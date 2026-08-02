@@ -66,18 +66,12 @@ export async function waitForDb(attempts = 15, delayMs = 3000) {
       await pool.query('SELECT 1');
       console.log('✓ Database connected');
 
-      // Check if schema exists (roles table)
-      const { rows } = await pool.query(
-        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'roles')"
-      );
-      if (!rows[0]?.exists) {
-        console.log('⚙ Tables missing — Running database schema & seed scripts...');
-        const schemaSql = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf-8');
-        const seedSql   = fs.readFileSync(path.join(__dirname, '../db/seed.sql'), 'utf-8');
-        await pool.query(schemaSql);
-        await pool.query(seedSql);
-        console.log('✓ Database schema and seed data initialized successfully');
-      }
+      console.log('⚙ Syncing database schema & seed scripts...');
+      const schemaSql = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf-8');
+      const seedSql   = fs.readFileSync(path.join(__dirname, '../db/seed.sql'), 'utf-8');
+      await pool.query(schemaSql);
+      await pool.query(seedSql);
+      console.log('✓ Database schema and seed data synced successfully');
       return;
     } catch (err) {
       console.log(`DB not ready (attempt ${i}/${attempts}): ${err.message}`);
