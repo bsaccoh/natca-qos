@@ -10,6 +10,7 @@ import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
 import PersonOutlineIcon      from '@mui/icons-material/PersonOutline';
 import { post, get }          from '../api/client.js';
 import { useAuth }            from '../auth/AuthContext.jsx';
+import { collectDiagnostics } from '../utils/diagnostics.js';
 
 const STEPS_AUTH  = ['Category', 'Details', 'Location', 'Review & Submit'];
 const STEPS_GUEST = ['Category', 'Details', 'Location', 'Contact Info', 'Review & Submit'];
@@ -171,7 +172,50 @@ function StepContact({ form, set }) {
   );
 }
 
-function StepReview({ form, operators, categories, isGuest }) {
+function DiagnosticsPanel({ diag, loading }) {
+  return (
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+        Network diagnostics {loading && <CircularProgress size={12} sx={{ ml: 1 }} />}
+      </Typography>
+      {!diag && !loading && (
+        <Typography variant="body2" color="text.secondary">Not collected yet.</Typography>
+      )}
+      {diag && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: 13 }}>
+          <Typography variant="caption" color="text.secondary">Location</Typography>
+          <Typography variant="caption" fontFamily="monospace">
+            {diag.geo?.available
+              ? `${diag.geo.latitude.toFixed(4)}, ${diag.geo.longitude.toFixed(4)} (±${Math.round(diag.geo.accuracy_m)}m)`
+              : `unavailable (${diag.geo?.reason || 'unknown'})`}
+          </Typography>
+
+          <Typography variant="caption" color="text.secondary">Connection</Typography>
+          <Typography variant="caption" fontFamily="monospace">
+            {diag.connection?.available
+              ? `${(diag.connection.effectiveType || '?').toUpperCase()} · ${diag.connection.downlinkMbps ?? '?'} Mbps · ${diag.connection.rttMs ?? '?'} ms`
+              : 'unavailable'}
+          </Typography>
+
+          <Typography variant="caption" color="text.secondary">Ping to NatCA</Typography>
+          <Typography variant="caption" fontFamily="monospace">
+            {diag.ping?.available ? `${diag.ping.rttMs} ms` : 'unavailable'}
+          </Typography>
+
+          <Typography variant="caption" color="text.secondary">Device</Typography>
+          <Typography variant="caption" fontFamily="monospace" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {diag.device?.platform} · {diag.device?.screen}
+          </Typography>
+        </Box>
+      )}
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, fontStyle: 'italic' }}>
+        This information helps NatCA investigate the issue. Radio-level details (signal strength, band) require the mobile app.
+      </Typography>
+    </Paper>
+  );
+}
+
+function StepReview({ form, operators, categories, isGuest, diag, diagLoading }) {
   const op  = operators.find((o) => String(o.operator_id) === String(form.operatorId));
   const cat = categories.find((c) => String(c.category_id) === String(form.categoryId));
 
@@ -206,6 +250,7 @@ function StepReview({ form, operators, categories, isGuest }) {
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Typography variant="body2">{form.description}</Typography>
       </Paper>
+      <DiagnosticsPanel diag={diag} loading={diagLoading} />
     </Stack>
   );
 }
@@ -227,6 +272,8 @@ export default function SubmitComplaint() {
   const [categories, setCategories] = useState([]);
   const [districts,  setDistricts]  = useState([]);
   const [chiefdoms,  setChiefdoms]  = useState([]);
+  const [diag,       setDiag]       = useState(null);
+  const [diagLoading,setDiagLoading]= useState(false);
 
   const [form, setForm] = useState({
     operatorId: '', categoryId: '', issueType: '', severity: 'MEDIUM',
@@ -256,6 +303,16 @@ export default function SubmitComplaint() {
   const STEP_CONTACT  = isGuest ? 3 : -1;
   const STEP_REVIEW   = isGuest ? 4 : 3;
 
+  // Collect diagnostics when user reaches the review step
+  useEffect(() => {
+    if (step === STEP_REVIEW && !diag && !diagLoading) {
+      setDiagLoading(true);
+      collectDiagnostics({ withLocation: true })
+        .then((d) => setDiag(d))
+        .finally(() => setDiagLoading(false));
+    }
+  }, [step, diag, diagLoading, STEP_REVIEW]);
+
   const canNext = () => {
     if (step === STEP_CATEGORY) return !!form.operatorId && !!form.issueType;
     if (step === STEP_DETAILS)  return form.description.trim().length >= 10;
@@ -265,6 +322,8 @@ export default function SubmitComplaint() {
 
   const submit = async () => {
     setLoading(true); setErr('');
+    // Guarantee we have diagnostics — collect now if not already
+    const diagnostics = diag || await collectDiagnostics({ withLocation: true });
     try {
       const res = await post('/complaints/submit', {
         operatorId:         form.operatorId   || undefined,
@@ -274,6 +333,8 @@ export default function SubmitComplaint() {
         districtId:         form.districtId   || undefined,
         chiefdomId:         form.chiefdomId   || undefined,
         areaDetail:         form.areaDetail   || undefined,
+        latitude:           diagnostics.geo?.latitude,
+        longitude:          diagnostics.geo?.longitude,
         description:        form.description,
         billingSubCategory: form.billingSubCategory || undefined,
         transactionRef:     form.transactionRef     || undefined,
@@ -282,6 +343,7 @@ export default function SubmitComplaint() {
         contactName:        isGuest ? form.contactName  || undefined : undefined,
         contactPhone:       isGuest ? form.contactPhone || undefined : undefined,
         contactEmail:       isGuest ? form.contactEmail || undefined : undefined,
+        networkDiagnostics: diagnostics,
         source:             'WEB',
         userId:             user?.userId,
       });
@@ -333,7 +395,7 @@ export default function SubmitComplaint() {
     <StepDetails  key="det"  form={form} set={set} />,
     <StepLocation key="loc"  form={form} set={set} districts={districts} chiefdoms={chiefdoms} />,
     ...(isGuest ? [<StepContact key="con" form={form} set={set} />] : []),
-    <StepReview   key="rev"  form={form} operators={operators} categories={categories} isGuest={isGuest} />,
+    <StepReview   key="rev"  form={form} operators={operators} categories={categories} isGuest={isGuest} diag={diag} diagLoading={diagLoading} />,
   ];
 
   return (

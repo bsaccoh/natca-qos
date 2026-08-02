@@ -32,8 +32,12 @@ export async function submitComplaint({
   districtId, chiefdomId, areaDetail, latitude, longitude, description,
   billingSubCategory, transactionRef, disputedAmount, transactionDate,
   contactName, contactPhone, contactEmail,
+  networkDiagnostics,
   source = 'WEB', ip,
 }) {
+  // If GPS came in via diagnostics and lat/lng weren't passed, promote them
+  if (networkDiagnostics?.geo?.latitude && !latitude)  latitude  = networkDiagnostics.geo.latitude;
+  if (networkDiagnostics?.geo?.longitude && !longitude) longitude = networkDiagnostics.geo.longitude;
   if (!issueType) throw ApiError.badRequest('issueType is required');
 
   const slaHours = await resolveSlaHours(categoryId, operatorId, priority, severity);
@@ -47,6 +51,7 @@ export async function submitComplaint({
        sla_hours, sla_deadline,
        billing_sub_category, transaction_ref, disputed_amount, transaction_date,
        contact_name, contact_phone, contact_email,
+       network_diagnostics,
        source, ip_address
      ) VALUES (
        :ref, :userId, :operatorId, :categoryId, :issueType, :severity, :priority,
@@ -54,6 +59,7 @@ export async function submitComplaint({
        :slaHours, :slaDeadline,
        :billingSubCategory, :transactionRef, :disputedAmount, :transactionDate,
        :contactName, :contactPhone, :contactEmail,
+       :networkDiagnostics,
        :source, :ip
      ) RETURNING complaint_id, complaint_ref, status, created_at`,
     {
@@ -66,6 +72,7 @@ export async function submitComplaint({
       billingSubCategory: billingSubCategory || null, transactionRef: transactionRef || null,
       disputedAmount: disputedAmount || null, transactionDate: transactionDate || null,
       contactName: contactName || null, contactPhone: contactPhone || null, contactEmail: contactEmail || null,
+      networkDiagnostics: networkDiagnostics ? JSON.stringify(networkDiagnostics) : null,
       source, ip: ip || null,
     }
   );

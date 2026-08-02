@@ -106,13 +106,67 @@ function ComplaintDrawer({ complaint, onClose, onUpdated, operators, users }) {
           </>
         )}
 
-        {complaint.reporter_name && (
+        {complaint.reporter_name ? (
           <>
             <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Reporter</Typography>
             <Typography variant="body2">{complaint.reporter_name} {complaint.reporter_phone && `· ${complaint.reporter_phone}`}</Typography>
             <Divider sx={{ my: 2 }} />
           </>
-        )}
+        ) : complaint.contact_name ? (
+          <>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+              Reporter (Guest)
+            </Typography>
+            <Typography variant="body2">
+              {complaint.contact_name}
+              {complaint.contact_phone && ` · ${complaint.contact_phone}`}
+              {complaint.contact_email && ` · ${complaint.contact_email}`}
+            </Typography>
+            <Divider sx={{ my: 2 }} />
+          </>
+        ) : null}
+
+        {complaint.network_diagnostics && (() => {
+          const d = typeof complaint.network_diagnostics === 'string'
+            ? JSON.parse(complaint.network_diagnostics)
+            : complaint.network_diagnostics;
+          return (
+            <>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Network Diagnostics</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0.5, mb: 2, fontSize: 13 }}>
+                <Typography variant="caption" color="text.secondary">GPS</Typography>
+                <Typography variant="caption" fontFamily="monospace">
+                  {d.geo?.available
+                    ? `${d.geo.latitude.toFixed(5)}, ${d.geo.longitude.toFixed(5)} (±${Math.round(d.geo.accuracy_m)}m)`
+                    : `unavailable (${d.geo?.reason || 'unknown'})`}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">Connection</Typography>
+                <Typography variant="caption" fontFamily="monospace">
+                  {d.connection?.available
+                    ? `${(d.connection.effectiveType || '?').toUpperCase()} · ${d.connection.downlinkMbps ?? '?'} Mbps down · ${d.connection.rttMs ?? '?'} ms RTT${d.connection.saveData ? ' · data-saver on' : ''}`
+                    : 'unavailable'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">Ping to NatCA</Typography>
+                <Typography variant="caption" fontFamily="monospace">
+                  {d.ping?.available ? `${d.ping.rttMs} ms` : 'unavailable'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">Device</Typography>
+                <Typography variant="caption" fontFamily="monospace" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {d.device?.platform} · {d.device?.screen} · {d.device?.language}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">User Agent</Typography>
+                <Typography variant="caption" fontFamily="monospace" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', wordBreak: 'break-all' }}>
+                  {d.device?.userAgent}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">Collected</Typography>
+                <Typography variant="caption" fontFamily="monospace">
+                  {d.collected_at ? new Date(d.collected_at).toLocaleString() : '—'}
+                </Typography>
+              </Box>
+              <Divider sx={{ my: 2 }} />
+            </>
+          );
+        })()}
 
         {/* Timeline */}
         {complaint.timeline?.length > 0 && (

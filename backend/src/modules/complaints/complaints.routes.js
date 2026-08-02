@@ -47,6 +47,7 @@ router.post('/submit', optionalAuth, asyncHandler(async (req, res) => {
     contactName:          z.string().optional(),
     contactPhone:         z.string().optional(),
     contactEmail:         z.string().email().optional(),
+    networkDiagnostics:   z.any().optional(),
     source:               z.string().optional(),
   }).parse(req.body);
 

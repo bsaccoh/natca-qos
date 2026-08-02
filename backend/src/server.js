@@ -9,6 +9,7 @@ async function runMigrations() {
   await query(`ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_name  VARCHAR(120)`);
   await query(`ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(30)`);
   await query(`ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_email VARCHAR(120)`);
+  await query(`ALTER TABLE complaints ADD COLUMN IF NOT EXISTS network_diagnostics JSONB`);
   console.log('✓ Migrations applied');
 }
 
