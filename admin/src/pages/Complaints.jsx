@@ -150,6 +150,14 @@ function ComplaintDrawer({ complaint, onClose, onUpdated, operators, users }) {
                 <Typography variant="caption" fontFamily="monospace">
                   {d.ping?.available ? `${d.ping.rttMs} ms` : 'unavailable'}
                 </Typography>
+                {d.speedTest && (
+                  <>
+                    <Typography variant="caption" color="text.secondary">Measured Speed</Typography>
+                    <Typography variant="caption" fontFamily="monospace">
+                      ↓ {d.speedTest.downloadMbps ?? '?'} Mbps · ↑ {d.speedTest.uploadMbps ?? '?'} Mbps · {d.speedTest.pingMs} ms ping · {d.speedTest.jitterMs} ms jitter
+                    </Typography>
+                  </>
+                )}
                 <Typography variant="caption" color="text.secondary">Device</Typography>
                 <Typography variant="caption" fontFamily="monospace" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {d.device?.platform} · {d.device?.screen} · {d.device?.language}

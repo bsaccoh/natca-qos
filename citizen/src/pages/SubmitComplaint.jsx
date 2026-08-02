@@ -11,6 +11,9 @@ import PersonOutlineIcon      from '@mui/icons-material/PersonOutline';
 import { post, get }          from '../api/client.js';
 import { useAuth }            from '../auth/AuthContext.jsx';
 import { collectDiagnostics } from '../utils/diagnostics.js';
+import { runQuickSpeedTest }  from '../utils/speedTest.js';
+import SpeedIcon              from '@mui/icons-material/Speed';
+import LocationOnIcon         from '@mui/icons-material/LocationOn';
 
 const STEPS_AUTH  = ['Category', 'Details', 'Location', 'Review & Submit'];
 const STEPS_GUEST = ['Category', 'Details', 'Location', 'Contact Info', 'Review & Submit'];
@@ -172,15 +175,35 @@ function StepContact({ form, set }) {
   );
 }
 
-function DiagnosticsPanel({ diag, loading }) {
+function DiagnosticsPanel({ diag, loading, onRunSpeedTest, speedTesting, onRequestLocation }) {
+  const geoDenied = diag?.geo?.reason === 'denied';
+  const sp = diag?.speedTest;
+
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
         Network diagnostics {loading && <CircularProgress size={12} sx={{ ml: 1 }} />}
       </Typography>
+
+      {geoDenied && (
+        <Alert
+          severity="warning"
+          icon={<LocationOnIcon fontSize="inherit" />}
+          sx={{ mb: 1.5, py: 0.5 }}
+          action={
+            <Button color="inherit" size="small" onClick={onRequestLocation}>
+              Enable
+            </Button>
+          }
+        >
+          Grant location access for faster complaint resolution.
+        </Alert>
+      )}
+
       {!diag && !loading && (
         <Typography variant="body2" color="text.secondary">Not collected yet.</Typography>
       )}
+
       {diag && (
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: 13 }}>
           <Typography variant="caption" color="text.secondary">Location</Typography>
@@ -206,8 +229,31 @@ function DiagnosticsPanel({ diag, loading }) {
           <Typography variant="caption" fontFamily="monospace" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {diag.device?.platform} · {diag.device?.screen}
           </Typography>
+
+          {sp && (
+            <>
+              <Typography variant="caption" color="text.secondary">Measured Speed</Typography>
+              <Typography variant="caption" fontFamily="monospace">
+                ↓ {sp.downloadMbps ?? '?'} Mbps · ↑ {sp.uploadMbps ?? '?'} Mbps · {sp.pingMs} ms
+              </Typography>
+            </>
+          )}
         </Box>
       )}
+
+      <Box sx={{ mt: 1.5 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={speedTesting ? <CircularProgress size={14} /> : <SpeedIcon />}
+          onClick={onRunSpeedTest}
+          disabled={speedTesting || !diag}
+          fullWidth
+        >
+          {speedTesting ? 'Measuring speed…' : sp ? 'Re-measure speed' : 'Run speed test (optional)'}
+        </Button>
+      </Box>
+
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, fontStyle: 'italic' }}>
         This information helps NatCA investigate the issue. Radio-level details (signal strength, band) require the mobile app.
       </Typography>
@@ -215,7 +261,7 @@ function DiagnosticsPanel({ diag, loading }) {
   );
 }
 
-function StepReview({ form, operators, categories, isGuest, diag, diagLoading }) {
+function StepReview({ form, operators, categories, isGuest, diag, diagLoading, onRunSpeedTest, speedTesting, onRequestLocation }) {
   const op  = operators.find((o) => String(o.operator_id) === String(form.operatorId));
   const cat = categories.find((c) => String(c.category_id) === String(form.categoryId));
 
@@ -250,7 +296,13 @@ function StepReview({ form, operators, categories, isGuest, diag, diagLoading })
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Typography variant="body2">{form.description}</Typography>
       </Paper>
-      <DiagnosticsPanel diag={diag} loading={diagLoading} />
+      <DiagnosticsPanel
+        diag={diag}
+        loading={diagLoading}
+        onRunSpeedTest={onRunSpeedTest}
+        speedTesting={speedTesting}
+        onRequestLocation={onRequestLocation}
+      />
     </Stack>
   );
 }
@@ -274,6 +326,27 @@ export default function SubmitComplaint() {
   const [chiefdoms,  setChiefdoms]  = useState([]);
   const [diag,       setDiag]       = useState(null);
   const [diagLoading,setDiagLoading]= useState(false);
+  const [speedTesting, setSpeedTesting] = useState(false);
+
+  const runSpeedTest = async () => {
+    setSpeedTesting(true);
+    try {
+      const sp = await runQuickSpeedTest();
+      setDiag((d) => (d ? { ...d, speedTest: sp } : d));
+    } finally {
+      setSpeedTesting(false);
+    }
+  };
+
+  const requestLocation = async () => {
+    setDiagLoading(true);
+    try {
+      const fresh = await collectDiagnostics({ withLocation: true });
+      setDiag((d) => ({ ...fresh, speedTest: d?.speedTest }));
+    } finally {
+      setDiagLoading(false);
+    }
+  };
 
   const [form, setForm] = useState({
     operatorId: '', categoryId: '', issueType: '', severity: 'MEDIUM',
@@ -395,7 +468,13 @@ export default function SubmitComplaint() {
     <StepDetails  key="det"  form={form} set={set} />,
     <StepLocation key="loc"  form={form} set={set} districts={districts} chiefdoms={chiefdoms} />,
     ...(isGuest ? [<StepContact key="con" form={form} set={set} />] : []),
-    <StepReview   key="rev"  form={form} operators={operators} categories={categories} isGuest={isGuest} diag={diag} diagLoading={diagLoading} />,
+    <StepReview
+      key="rev"
+      form={form} operators={operators} categories={categories} isGuest={isGuest}
+      diag={diag} diagLoading={diagLoading}
+      onRunSpeedTest={runSpeedTest} speedTesting={speedTesting}
+      onRequestLocation={requestLocation}
+    />,
   ];
 
   return (
