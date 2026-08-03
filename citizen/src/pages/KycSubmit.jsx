@@ -8,8 +8,15 @@ import {
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
 import CloudUploadIcon        from '@mui/icons-material/CloudUpload';
+import FaceIcon               from '@mui/icons-material/Face';
+import FingerprintIcon        from '@mui/icons-material/Fingerprint';
+import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
+import CancelIcon             from '@mui/icons-material/Cancel';
+import HelpOutlineIcon        from '@mui/icons-material/HelpOutline';
 import { get, api }           from '../api/client.js';
 import { useAuth }            from '../auth/AuthContext.jsx';
+import { verifyFaceAgainstId } from '../utils/faceMatch.js';
+import { verifyNinAgainstId }  from '../utils/ninOcr.js';
 
 const STEPS = ['Phone & Operator', 'Identity Details', 'Documents', 'Face Photo', 'Review & Submit'];
 
@@ -137,6 +144,67 @@ function Step4({ files, setFile }) {
   );
 }
 
+function VerificationRow({ icon, label, state, message, score }) {
+  let statusIcon, color;
+  if (state === 'running') { statusIcon = <CircularProgress size={16} />; color = 'text.secondary'; }
+  else if (state === 'pass') { statusIcon = <CheckCircleIcon fontSize="small" sx={{ color: 'success.main' }} />; color = 'success.main'; }
+  else if (state === 'fail') { statusIcon = <CancelIcon      fontSize="small" sx={{ color: 'error.main' }}   />; color = 'error.main'; }
+  else if (state === 'skip') { statusIcon = <HelpOutlineIcon fontSize="small" sx={{ color: 'warning.main' }} />; color = 'warning.main'; }
+  else                        { statusIcon = null; color = 'text.disabled'; }
+
+  return (
+    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', py: 1 }}>
+      <Box sx={{ color: 'primary.main', mt: 0.25 }}>{icon}</Box>
+      <Box sx={{ flex: 1 }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Typography variant="subtitle2" fontWeight={700}>{label}</Typography>
+          {typeof score === 'number' && (
+            <Chip size="small" label={`${score}%`} color={state === 'pass' ? 'success' : state === 'fail' ? 'error' : 'default'} />
+          )}
+        </Stack>
+        <Typography variant="caption" sx={{ display: 'block', color }}>
+          {state === 'idle'    && 'Waiting to run…'}
+          {state === 'running' && 'Analysing image…'}
+          {(state === 'pass' || state === 'fail' || state === 'skip') && message}
+        </Typography>
+      </Box>
+      <Box>{statusIcon}</Box>
+    </Box>
+  );
+}
+
+function VerificationPanel({ verifying, faceResult, ninResult, onRetry }) {
+  const faceState = verifying?.face ? 'running' : (faceResult ? (faceResult.ok ? 'pass' : 'fail') : 'idle');
+  const ninState  = verifying?.nin  ? 'running' : (ninResult
+    ? (ninResult.ok === true ? 'pass' : ninResult.ok === false ? 'fail' : 'skip')
+    : 'idle');
+
+  return (
+    <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Identity checks</Typography>
+      <VerificationRow
+        icon={<FaceIcon fontSize="small" />}
+        label="Face on ID matches your selfie"
+        state={faceState}
+        message={faceResult?.message}
+        score={faceResult?.score}
+      />
+      <Divider />
+      <VerificationRow
+        icon={<FingerprintIcon fontSize="small" />}
+        label="NIN matches text on ID"
+        state={ninState}
+        message={ninResult?.message}
+      />
+      {(faceResult || ninResult) && (
+        <Button size="small" variant="text" onClick={onRetry} sx={{ mt: 1 }}>
+          Re-run checks
+        </Button>
+      )}
+    </Paper>
+  );
+}
+
 function Step5({ form, files, operators }) {
   const op = operators.find((o) => String(o.operator_id) === String(form.operatorId));
   const rows = [
@@ -181,6 +249,33 @@ export default function KycSubmit() {
   const [copied, setCopied]     = useState(false);
   const [flash, setFlash]       = useState(null); // { ref, status }
   const isGuest = !user;
+
+  // Identity verification state
+  const [verifying, setVerifying] = useState({ face: false, nin: false });
+  const [faceResult, setFaceResult] = useState(null);
+  const [ninResult,  setNinResult]  = useState(null);
+
+  const runVerification = async () => {
+    if (!files.idFront || !files.face) return;
+    // Reset + start face check
+    setFaceResult(null); setNinResult(null);
+    setVerifying({ face: true, nin: !!form.nin });
+
+    // Fire both in parallel
+    const facePromise = verifyFaceAgainstId({ idFrontFile: files.idFront, selfieFile: files.face })
+      .then((r) => setFaceResult(r))
+      .catch((e) => setFaceResult({ ok: false, score: 0, message: `Face check error: ${e.message || 'unknown'}` }))
+      .finally(() => setVerifying((v) => ({ ...v, face: false })));
+
+    const ninPromise = form.nin
+      ? verifyNinAgainstId({ idFrontFile: files.idFront, nin: form.nin })
+          .then((r) => setNinResult(r))
+          .catch((e) => setNinResult({ ok: null, message: `OCR error: ${e.message || 'unknown'}` }))
+          .finally(() => setVerifying((v) => ({ ...v, nin: false })))
+      : Promise.resolve();
+
+    await Promise.all([facePromise, ninPromise]);
+  };
   const [operators,  setOperators]  = useState([]);
   const [districts,  setDistricts]  = useState([]);
   const [chiefdoms,  setChiefdoms]  = useState([]);
@@ -206,12 +301,26 @@ export default function KycSubmit() {
     get(`/districts/${form.districtId}/chiefdoms`).then((r) => setChiefdoms(r.data || [])).catch(() => setChiefdoms([]));
   }, [form.districtId]);
 
+  // Auto-run identity checks when user reaches the Review step
+  useEffect(() => {
+    if (step === 4 && files.idFront && files.face && !faceResult && !verifying.face) {
+      runVerification();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   const canNext = () => {
     if (step === 0) return !!form.phone && !!form.operatorId;
     if (step === 1) return !!form.firstName && !!form.lastName;
     if (step === 3) return !!files.face;
     return true;
   };
+
+  // Submit blocked if face check is still running or has failed.
+  // NIN OCR is best-effort; skip / unknown does NOT block.
+  const canSubmit = !loading
+    && !verifying.face && !verifying.nin
+    && faceResult && faceResult.ok === true;
 
   const submit = async () => {
     setLoading(true); setErr('');
@@ -321,6 +430,14 @@ export default function KycSubmit() {
       {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
 
       <Paper sx={{ p: { xs: 2.5, sm: 3.5 }, mb: 3 }}>
+        {step === 4 && (
+          <VerificationPanel
+            verifying={verifying}
+            faceResult={faceResult}
+            ninResult={ninResult}
+            onRetry={runVerification}
+          />
+        )}
         {stepComponents[step]}
       </Paper>
 
@@ -333,8 +450,14 @@ export default function KycSubmit() {
             Next
           </Button>
         ) : (
-          <Button variant="contained" color="success" disabled={loading} onClick={submit}>
-            {loading ? <CircularProgress size={22} /> : 'Submit Registration'}
+          <Button variant="contained" color="success" disabled={!canSubmit} onClick={submit}>
+            {loading
+              ? <CircularProgress size={22} />
+              : verifying.face || verifying.nin
+                ? 'Running checks…'
+                : (faceResult && !faceResult.ok)
+                  ? 'Face check failed'
+                  : 'Submit Registration'}
           </Button>
         )}
       </Stack>
