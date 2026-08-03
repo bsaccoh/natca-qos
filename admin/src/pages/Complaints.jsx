@@ -176,6 +176,47 @@ function ComplaintDrawer({ complaint, onClose, onUpdated, operators, users }) {
           );
         })()}
 
+        {/* Attachments */}
+        {complaint.attachments?.length > 0 && (
+          <>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+              Attachments ({complaint.attachments.length})
+            </Typography>
+            <Stack spacing={0.75} sx={{ mb: 2 }}>
+              {complaint.attachments.map((a) => (
+                <Box key={a.attachment_id} sx={{
+                  display: 'flex', alignItems: 'center', gap: 1, p: 1,
+                  border: 1, borderColor: 'divider', borderRadius: 1,
+                }}>
+                  <Typography variant="body2" sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.file_name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {a.mime_type?.split('/')[1] || 'file'} · {Math.round((a.file_size || 0) / 1024)} KB
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={async () => {
+                      try {
+                        const res = await api.get(`/attachments/${a.attachment_id}`, { responseType: 'blob' });
+                        const url = URL.createObjectURL(res.data);
+                        window.open(url, '_blank');
+                        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                      } catch (err) {
+                        console.error('Failed to load attachment', err);
+                      }
+                    }}
+                  >
+                    View
+                  </Button>
+                </Box>
+              ))}
+            </Stack>
+            <Divider sx={{ my: 2 }} />
+          </>
+        )}
+
         {/* Timeline */}
         {complaint.timeline?.length > 0 && (
           <>

@@ -14,7 +14,12 @@ import { collectDiagnostics } from '../utils/diagnostics.js';
 import { runQuickSpeedTest }  from '../utils/speedTest.js';
 import SpeedIcon              from '@mui/icons-material/Speed';
 import LocationOnIcon         from '@mui/icons-material/LocationOn';
+import CloudUploadIcon        from '@mui/icons-material/CloudUpload';
+import AttachFileIcon         from '@mui/icons-material/AttachFile';
+import CloseIcon              from '@mui/icons-material/Close';
 import GaugeComponent         from 'react-gauge-component';
+import IconButton             from '@mui/material/IconButton';
+import { api }                from '../api/client.js';
 
 const STEPS_AUTH  = ['Category', 'Details', 'Location', 'Review & Submit'];
 const STEPS_GUEST = ['Category', 'Details', 'Location', 'Contact Info', 'Review & Submit'];
@@ -70,7 +75,69 @@ function StepCategory({ form, set, categories, operators }) {
   );
 }
 
-function StepDetails({ form, set }) {
+const MAX_FILES = 5;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_TYPES = /^(image\/|application\/pdf$)/;
+
+function AttachmentField({ files, onAdd, onRemove }) {
+  const handleChange = (e) => {
+    const chosen = Array.from(e.target.files || []);
+    const room = MAX_FILES - files.length;
+    const filtered = chosen
+      .slice(0, room)
+      .filter((f) => ALLOWED_TYPES.test(f.type) && f.size <= MAX_FILE_SIZE);
+    onAdd(filtered);
+    e.target.value = '';
+  };
+  return (
+    <Box>
+      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+        Evidence (optional)
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+        Attach up to {MAX_FILES} photos, screenshots, or PDF documents (10 MB each).
+      </Typography>
+      <Button
+        component="label"
+        variant="outlined"
+        size="small"
+        startIcon={<CloudUploadIcon />}
+        disabled={files.length >= MAX_FILES}
+      >
+        {files.length >= MAX_FILES ? 'Maximum reached' : 'Add files'}
+        <input
+          type="file"
+          hidden
+          multiple
+          accept="image/*,application/pdf"
+          onChange={handleChange}
+        />
+      </Button>
+      {files.length > 0 && (
+        <Stack spacing={0.75} sx={{ mt: 1.5 }}>
+          {files.map((f, i) => (
+            <Paper key={i} variant="outlined" sx={{
+              px: 1.25, py: 0.75, display: 'flex', alignItems: 'center', gap: 1,
+            }}>
+              <AttachFileIcon fontSize="small" color="action" />
+              <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                <Typography variant="body2" noWrap>{f.name}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {(f.size / 1024).toFixed(0)} KB
+                </Typography>
+              </Box>
+              <IconButton size="small" onClick={() => onRemove(i)}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Paper>
+          ))}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
+function StepDetails({ form, set, files, onAddFiles, onRemoveFile }) {
   return (
     <Stack spacing={2.5}>
       <Typography variant="subtitle2" color="text.secondary">
@@ -95,6 +162,8 @@ function StepDetails({ form, set }) {
           <TextField label="Transaction Date" type="date" value={form.transactionDate} onChange={set('transactionDate')} fullWidth InputLabelProps={{ shrink: true }} />
         </>
       )}
+      <Divider />
+      <AttachmentField files={files} onAdd={onAddFiles} onRemove={onRemoveFile} />
     </Stack>
   );
 }
@@ -313,7 +382,7 @@ function DiagnosticsPanel({ diag, loading, onRunSpeedTest, speedTesting, speedPh
   );
 }
 
-function StepReview({ form, operators, categories, isGuest, diag, diagLoading, onRunSpeedTest, speedTesting, speedPhase, gaugeValue, onRequestLocation }) {
+function StepReview({ form, operators, categories, isGuest, diag, diagLoading, onRunSpeedTest, speedTesting, speedPhase, gaugeValue, onRequestLocation, filesCount = 0 }) {
   const op  = operators.find((o) => String(o.operator_id) === String(form.operatorId));
   const cat = categories.find((c) => String(c.category_id) === String(form.categoryId));
 
@@ -324,6 +393,7 @@ function StepReview({ form, operators, categories, isGuest, diag, diagLoading, o
     { l: 'Severity',   v: form.severity },
     { l: 'District',   v: form.districtId ? 'Selected' : '—' },
     { l: 'Area',       v: form.areaDetail || '—' },
+    { l: 'Attachments', v: filesCount > 0 ? `${filesCount} file${filesCount > 1 ? 's' : ''}` : '—' },
     ...(isGuest ? [
       { l: 'Contact Name',  v: form.contactName || '—' },
       { l: 'Phone',         v: form.contactPhone || '—' },
@@ -373,7 +443,30 @@ export default function SubmitComplaint() {
   const [err, setErr]             = useState('');
   const [submitted, setSubmitted] = useState(null);
   const [copied, setCopied]       = useState(false);
-  const [flash, setFlash]         = useState(null); // { ref, status, notifiedChannels }
+  const [flash, setFlash]         = useState(null); // { ref, status, notifiedChannels, uploadNote }
+  const [files, setFiles]         = useState([]);
+  const [uploading, setUploading] = useState(false);
+
+  const addFiles    = (newFiles) => setFiles((prev) => [...prev, ...newFiles]);
+  const removeFile  = (idx)      => setFiles((prev) => prev.filter((_, i) => i !== idx));
+
+  const uploadAttachments = async (complaintId) => {
+    if (!files.length || !complaintId) return { ok: 0, failed: 0 };
+    let okCount = 0, failCount = 0;
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('complaintId', String(complaintId));
+      try {
+        await api.post('/attachments/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        okCount++;
+      } catch (e) {
+        console.error('attachment upload failed:', file.name, e?.message);
+        failCount++;
+      }
+    }
+    return { ok: okCount, failed: failCount };
+  };
 
   const [operators,  setOperators]  = useState([]);
   const [categories, setCategories] = useState([]);
@@ -484,7 +577,25 @@ export default function SubmitComplaint() {
       });
       setSubmitted(res.data);
       const ref = res.data.complaint_ref || res.data.complaintRef;
-      setFlash({ ref, status: res.data.status, notifiedChannels: res.data.notifiedChannels || [] });
+      const complaintId = res.data.complaint_id || res.data.complaintId;
+
+      // Upload evidence in the background — don't block the flash
+      let uploadNote = '';
+      if (files.length) {
+        setUploading(true);
+        const { ok, failed } = await uploadAttachments(complaintId);
+        uploadNote = failed > 0
+          ? `${ok} of ${ok + failed} file(s) uploaded — ${failed} failed`
+          : `${ok} file(s) uploaded`;
+        setUploading(false);
+      }
+
+      setFlash({
+        ref,
+        status: res.data.status,
+        notifiedChannels: res.data.notifiedChannels || [],
+        uploadNote,
+      });
     } catch (ex) {
       setErr(ex.response?.data?.error || 'Submission failed. Please try again.');
     } finally { setLoading(false); }
@@ -518,6 +629,11 @@ export default function SubmitComplaint() {
           {flash.notifiedChannels?.length > 0 && (
             <Typography variant="caption" sx={{ opacity: 0.9 }}>
               Confirmation sent via {flash.notifiedChannels.join(', ')}
+            </Typography>
+          )}
+          {flash.uploadNote && (
+            <Typography variant="caption" sx={{ opacity: 0.9 }}>
+              {flash.uploadNote}
             </Typography>
           )}
         </Box>
@@ -561,7 +677,7 @@ export default function SubmitComplaint() {
 
   const stepComponents = [
     <StepCategory key="cat"  form={form} set={set} categories={categories} operators={operators} />,
-    <StepDetails  key="det"  form={form} set={set} />,
+    <StepDetails  key="det"  form={form} set={set} files={files} onAddFiles={addFiles} onRemoveFile={removeFile} />,
     <StepLocation key="loc"  form={form} set={set} districts={districts} chiefdoms={chiefdoms} />,
     ...(isGuest ? [<StepContact key="con" form={form} set={set} />] : []),
     <StepReview
@@ -571,6 +687,7 @@ export default function SubmitComplaint() {
       onRunSpeedTest={runSpeedTest} speedTesting={speedTesting}
       speedPhase={speedPhase} gaugeValue={gaugeValue}
       onRequestLocation={requestLocation}
+      filesCount={files.length}
     />,
   ];
 
@@ -602,8 +719,10 @@ export default function SubmitComplaint() {
             Next
           </Button>
         ) : (
-          <Button variant="contained" color="success" disabled={loading} onClick={submit}>
-            {loading ? <CircularProgress size={22} /> : 'Submit Complaint'}
+          <Button variant="contained" color="success" disabled={loading || uploading} onClick={submit}>
+            {loading || uploading
+              ? <CircularProgress size={22} />
+              : (files.length ? `Submit + Upload ${files.length}` : 'Submit Complaint')}
           </Button>
         )}
       </Stack>
