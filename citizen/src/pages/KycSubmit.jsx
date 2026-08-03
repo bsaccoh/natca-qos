@@ -203,6 +203,7 @@ function Step4({ files, setFile }) {
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onCapture={(file) => setFile('face', file)}
+        idFrontFile={files.idFront}
       />
     </Stack>
   );
