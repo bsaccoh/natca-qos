@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
-  Alert, Box, Button, CircularProgress, Container, FormControl,
-  InputLabel, MenuItem, Paper, Select, Stack, Step, StepLabel,
+  Alert, AlertTitle, Box, Button, CircularProgress, Container, FormControl,
+  InputLabel, MenuItem, Paper, Select, Snackbar, Stack, Step, StepLabel,
   Stepper, TextField, Typography, Divider, Chip,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
 import CloudUploadIcon        from '@mui/icons-material/CloudUpload';
-import { get }                from '../api/client.js';
+import { get, api }           from '../api/client.js';
 import { useAuth }            from '../auth/AuthContext.jsx';
 
 const STEPS = ['Phone & Operator', 'Identity Details', 'Documents', 'Face Photo', 'Review & Submit'];
@@ -179,6 +179,8 @@ export default function KycSubmit() {
   const [err, setErr]           = useState('');
   const [submitted, setSubmitted] = useState(null);
   const [copied, setCopied]     = useState(false);
+  const [flash, setFlash]       = useState(null); // { ref, status }
+  const isGuest = !user;
   const [operators,  setOperators]  = useState([]);
   const [districts,  setDistricts]  = useState([]);
   const [chiefdoms,  setChiefdoms]  = useState([]);
@@ -221,16 +223,14 @@ export default function KycSubmit() {
       if (files.face)    fd.append('face',      files.face);
       if (user?.userId)  fd.append('userId',    user.userId);
 
-      const r = await fetch('/api/v1/kyc/submit', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('cms_access') || ''}` },
-        body: fd,
+      const r = await api.post('/kyc/submit', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json.error || 'Submission failed');
-      setSubmitted(json.data || json);
+      const payload = r.data?.data || r.data;
+      setSubmitted(payload);
+      setFlash({ ref: payload.kyc_reference, status: payload.status || 'PENDING' });
     } catch (ex) {
-      setErr(ex.message || 'Submission failed. Please try again.');
+      setErr(ex.response?.data?.error || ex.message || 'Submission failed. Please try again.');
     } finally { setLoading(false); }
   };
 
@@ -240,8 +240,34 @@ export default function KycSubmit() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const flashSnackbar = flash ? (
+    <Snackbar
+      open
+      autoHideDuration={7000}
+      onClose={() => setFlash(null)}
+      anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+    >
+      <Alert
+        severity="success"
+        variant="filled"
+        onClose={() => setFlash(null)}
+        sx={{ minWidth: { xs: 300, sm: 420 }, boxShadow: 6 }}
+      >
+        <AlertTitle sx={{ fontWeight: 700 }}>KYC submitted</AlertTitle>
+        <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+          <Typography variant="body2">
+            Reference: <strong style={{ fontFamily: 'monospace' }}>{flash.ref}</strong>
+          </Typography>
+          <Typography variant="body2">Status: <strong>{flash.status}</strong></Typography>
+        </Box>
+      </Alert>
+    </Snackbar>
+  ) : null;
+
   if (submitted) {
     return (
+      <>
+      {flashSnackbar}
       <Container maxWidth="sm" sx={{ py: 8 }}>
         <Paper sx={{ p: 5, textAlign: 'center' }}>
           <CheckCircleOutlineIcon sx={{ fontSize: 72, color: 'success.main', mb: 2 }} />
@@ -255,11 +281,19 @@ export default function KycSubmit() {
           </Paper>
           {copied && <Typography variant="caption" color="success.main" display="block" sx={{ mb: 2 }}>Copied!</Typography>}
           <Chip label={submitted.status || 'PENDING'} color="warning" sx={{ mb: 3 }} />
+          {isGuest && (
+            <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
+              <strong>Save your reference number.</strong> Without an account you will need it to check your status.
+              Look it up any time at <Link to="/kyc/status" style={{ fontWeight: 600 }}>Check KYC Status</Link>.
+            </Alert>
+          )}
           <Stack spacing={1.5} direction={{ xs: 'column', sm: 'row' }} justifyContent="center">
-            <Button variant="contained" onClick={() => navigate('/')}>Back to Home</Button>
+            <Button variant="contained" onClick={() => navigate('/kyc/status')}>Check Status</Button>
+            <Button variant="outlined" onClick={() => navigate('/')}>Back to Home</Button>
           </Stack>
         </Paper>
       </Container>
+      </>
     );
   }
 
@@ -272,6 +306,8 @@ export default function KycSubmit() {
   ];
 
   return (
+    <>
+    {flashSnackbar}
     <Container maxWidth="sm" sx={{ py: 5 }}>
       <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5 }}>SIM Registration (KYC)</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -303,5 +339,6 @@ export default function KycSubmit() {
         )}
       </Stack>
     </Container>
+    </>
   );
 }

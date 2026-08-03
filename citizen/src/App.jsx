@@ -9,6 +9,7 @@ import SubmitComplaint     from './pages/SubmitComplaint.jsx';
 import TrackComplaint      from './pages/TrackComplaint.jsx';
 import MyComplaints        from './pages/MyComplaints.jsx';
 import KycSubmit           from './pages/KycSubmit.jsx';
+import KycStatus           from './pages/KycStatus.jsx';
 import SpeedTest           from './pages/SpeedTest.jsx';
 import News               from './pages/News.jsx';
 import UssdDirectory      from './pages/UssdDirectory.jsx';
@@ -45,9 +46,8 @@ export default function App() {
         <Route path="/my-complaints" element={
           <Protected><PortalLayout><MyComplaints /></PortalLayout></Protected>
         } />
-        <Route path="/kyc" element={
-          <Protected><PortalLayout><KycSubmit /></PortalLayout></Protected>
-        } />
+        <Route path="/kyc"        element={<PortalLayout><KycSubmit /></PortalLayout>} />
+        <Route path="/kyc/status" element={<PortalLayout><KycStatus /></PortalLayout>} />
         <Route path="/speed-test" element={
           <Protected><PortalLayout><SpeedTest /></PortalLayout></Protected>
         } />

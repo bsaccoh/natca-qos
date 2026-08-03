@@ -406,7 +406,7 @@ export default function LandingPage() {
   const services = [
     { icon: <ReportProblemIcon />, title: 'File a Complaint', desc: 'Report network, billing or service quality issues', to: '/submit' },
     { icon: <SearchIcon />, title: 'Track Status', desc: 'Follow your case with a reference number', to: '/track' },
-    { icon: <VerifiedUserIcon />, title: 'KYC / SIM Registration', desc: 'Verify your identity and register your SIM', to: user ? '/kyc' : '/register' },
+    { icon: <VerifiedUserIcon />, title: 'KYC / SIM Registration', desc: 'Verify your identity and register your SIM', to: '/kyc' },
     { icon: <PhoneAndroidIcon />, title: 'Mobile Access', desc: 'Available on the NatCA citizen mobile app', to: '/submit' },
   ];
 

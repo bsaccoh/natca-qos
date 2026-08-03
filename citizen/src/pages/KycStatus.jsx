@@ -84,7 +84,7 @@ export default function KycStatus() {
     setLoading(true); setError(''); setResult(null); setResubmitSuccess(false);
 
     try {
-      const res = await get(`/kyc/lookup?ref=${encodeURIComponent(query.trim())}`).catch(() => null);
+      const res = await get(`/kyc/status/${encodeURIComponent(query.trim())}`).catch(() => null);
       if (res?.data) {
         const rawStatus = (res.data.status || '').toUpperCase();
         const normStatus = rawStatus.includes('APPROV') ? 'Approved' : rawStatus.includes('REJECT') || rawStatus.includes('SUSPEND') ? 'Reject' : 'Pending';

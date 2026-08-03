@@ -22,7 +22,8 @@ const LINKS = [
   { label: 'Submit Complaint', to: '/submit',        icon: <ReportProblemIcon fontSize="small" />, public: true  },
   { label: 'Track Complaint',  to: '/track',         icon: <SearchIcon fontSize="small" />,        public: true  },
   { label: 'My Complaints',    to: '/my-complaints', icon: <ListAltIcon fontSize="small" />,       public: false },
-  { label: 'KYC / SIM Reg',   to: '/kyc',           icon: <VerifiedUserIcon fontSize="small" />,  public: false },
+  { label: 'KYC / SIM Reg',    to: '/kyc',           icon: <VerifiedUserIcon fontSize="small" />,  public: true  },
+  { label: 'Check KYC Status', to: '/kyc/status',    icon: <SearchIcon fontSize="small" />,        public: true  },
   { label: 'Speed Test',       to: '/speed-test',    icon: <SpeedIcon fontSize="small" />,         public: false },
 ];
 
