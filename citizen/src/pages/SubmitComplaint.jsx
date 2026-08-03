@@ -494,37 +494,34 @@ export default function SubmitComplaint() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const flashSnackbar = (
+  const flashSnackbar = flash ? (
     <Snackbar
-      open={!!flash}
+      open
       autoHideDuration={7000}
       onClose={() => setFlash(null)}
       anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      TransitionComponent={Slide}
     >
-      {flash ? (
-        <Alert
-          severity="success"
-          variant="filled"
-          onClose={() => setFlash(null)}
-          sx={{ minWidth: { xs: 300, sm: 420 }, boxShadow: 6 }}
-        >
-          <AlertTitle sx={{ fontWeight: 700 }}>Complaint received</AlertTitle>
-          <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-            <Typography variant="body2">
-              Reference: <strong style={{ fontFamily: 'monospace' }}>{flash.ref}</strong>
+      <Alert
+        severity="success"
+        variant="filled"
+        onClose={() => setFlash(null)}
+        sx={{ minWidth: { xs: 300, sm: 420 }, boxShadow: 6 }}
+      >
+        <AlertTitle sx={{ fontWeight: 700 }}>Complaint received</AlertTitle>
+        <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+          <Typography variant="body2">
+            Reference: <strong style={{ fontFamily: 'monospace' }}>{flash.ref}</strong>
+          </Typography>
+          <Typography variant="body2">Status: <strong>{flash.status}</strong></Typography>
+          {flash.notifiedChannels?.length > 0 && (
+            <Typography variant="caption" sx={{ opacity: 0.9 }}>
+              Confirmation sent via {flash.notifiedChannels.join(', ')}
             </Typography>
-            <Typography variant="body2">Status: <strong>{flash.status}</strong></Typography>
-            {flash.notifiedChannels?.length > 0 && (
-              <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                Confirmation sent via {flash.notifiedChannels.join(', ')}
-              </Typography>
-            )}
-          </Box>
-        </Alert>
-      ) : <span />}
+          )}
+        </Box>
+      </Alert>
     </Snackbar>
-  );
+  ) : null;
 
   if (submitted) {
     const ref = submitted.complaint_ref || submitted.complaintRef;
