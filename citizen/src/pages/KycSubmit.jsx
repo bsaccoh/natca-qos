@@ -23,15 +23,42 @@ const STEPS = ['Phone & Operator', 'Identity Details', 'Documents', 'Face Photo'
 const ID_TYPES = ['NATIONAL_ID', 'PASSPORT', 'VOTER_CARD', 'DRIVER_LICENSE'];
 
 /* ── File upload button ───────────────────────────────────────────────────── */
-function FileField({ label, name, value, onChange, required }) {
+function FileField({ label, name, value, onChange, required, capture, accept = 'image/*,application/pdf' }) {
+  const isCamera = !!capture;
+  const cta = value
+    ? `✓ ${value.name}`
+    : (isCamera
+        ? (capture === 'user' ? `Take selfie` : `Take photo of ${label}`)
+        : `Upload ${label}`);
   return (
     <Box>
       <Typography variant="caption" color="text.secondary" display="block" gutterBottom>{label}{required && ' *'}</Typography>
-      <Button component="label" variant="outlined" startIcon={<CloudUploadIcon />} size="small"
-        color={value ? 'success' : 'primary'} sx={{ textTransform: 'none' }}>
-        {value ? `✓ ${value.name}` : `Upload ${label}`}
-        <input type="file" hidden name={name} accept="image/*,application/pdf" onChange={onChange} />
-      </Button>
+      <Stack direction="row" spacing={1} flexWrap="wrap">
+        {isCamera && (
+          <Button
+            component="label"
+            variant="contained"
+            startIcon={<CloudUploadIcon />}
+            size="small"
+            color={value ? 'success' : 'primary'}
+            sx={{ textTransform: 'none' }}
+          >
+            {cta}
+            <input type="file" hidden name={name} accept={accept} capture={capture} onChange={onChange} />
+          </Button>
+        )}
+        <Button
+          component="label"
+          variant={isCamera ? 'outlined' : 'contained'}
+          startIcon={<CloudUploadIcon />}
+          size="small"
+          color={value && !isCamera ? 'success' : 'primary'}
+          sx={{ textTransform: 'none' }}
+        >
+          {isCamera ? 'Or choose from gallery' : cta}
+          <input type="file" hidden name={name} accept={accept} onChange={onChange} />
+        </Button>
+      </Stack>
     </Box>
   );
 }
@@ -115,8 +142,10 @@ function Step3({ files, setFile }) {
         Upload clear photos of your identity document and supporting files
       </Typography>
       <Alert severity="info">Photos must be clear, well-lit, and all corners visible. Accepted formats: JPG, PNG, PDF.</Alert>
-      <FileField label="ID Front"    name="id_front" value={files.idFront} onChange={(e) => setFile('idFront', e.target.files[0])} required />
-      <FileField label="ID Back"     name="id_back"  value={files.idBack}  onChange={(e) => setFile('idBack',  e.target.files[0])} />
+      <FileField label="ID Front" name="id_front" capture="environment" accept="image/*"
+        value={files.idFront} onChange={(e) => setFile('idFront', e.target.files[0])} required />
+      <FileField label="ID Back"  name="id_back"  capture="environment" accept="image/*"
+        value={files.idBack}  onChange={(e) => setFile('idBack',  e.target.files[0])} />
     </Stack>
   );
 }
@@ -130,7 +159,8 @@ function Step4({ files, setFile }) {
       <Alert severity="info" sx={{ textAlign: 'left' }}>
         <strong>Tips:</strong> face the camera directly, ensure good lighting, remove glasses/hat if possible.
       </Alert>
-      <FileField label="Selfie / Face Photo" name="face" value={files.face} onChange={(e) => setFile('face', e.target.files[0])} required />
+      <FileField label="Selfie / Face Photo" name="face" capture="user" accept="image/*"
+        value={files.face} onChange={(e) => setFile('face', e.target.files[0])} required />
       {files.face && (
         <Box sx={{ mt: 1 }}>
           <img
