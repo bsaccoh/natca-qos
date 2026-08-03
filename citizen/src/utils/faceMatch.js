@@ -11,6 +11,8 @@ const MATCH_THRESHOLD_PCT = 55;
 
 let modelsLoaded = false;
 let modelsLoading = null;
+let ssdLoaded = false;
+let ssdLoading = null;
 
 async function loadModels() {
   if (modelsLoaded) return;
@@ -22,6 +24,16 @@ async function loadModels() {
     ]).then(() => { modelsLoaded = true; });
   }
   await modelsLoading;
+}
+
+// SsdMobilenetV1 is much better than TinyFaceDetector at finding small/low-quality
+// faces on static images (like ID cards). ~5MB, loaded lazily on first fallback.
+async function loadSsdIfNeeded() {
+  if (ssdLoaded) return;
+  if (!ssdLoading) {
+    ssdLoading = faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL).then(() => { ssdLoaded = true; });
+  }
+  await ssdLoading;
 }
 
 // Load a File into a canvas. Handles JPEG, PNG, WebP, GIF, BMP and (on capable
@@ -64,12 +76,38 @@ async function fileToCanvas(file) {
   return canvas;
 }
 
-async function getDescriptor(file) {
+async function detectWithTiny(canvas, { inputSize, scoreThreshold }) {
+  const opts = new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold });
+  return faceapi.detectSingleFace(canvas, opts).withFaceLandmarks().withFaceDescriptor();
+}
+
+async function detectWithSsd(canvas, { minConfidence = 0.3 } = {}) {
+  await loadSsdIfNeeded();
+  const opts = new faceapi.SsdMobilenetv1Options({ minConfidence });
+  return faceapi.detectSingleFace(canvas, opts).withFaceLandmarks().withFaceDescriptor();
+}
+
+// Multi-pass face detection: cheap-first, then progressively more thorough.
+// Static ID images often have small / lower-resolution faces that the default
+// TinyFaceDetector settings miss, so we widen the net before giving up.
+async function getDescriptor(file, { thorough = false } = {}) {
   const canvas = await fileToCanvas(file);
-  const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
-  const detection = await faceapi.detectSingleFace(canvas, opts).withFaceLandmarks().withFaceDescriptor();
-  if (!detection) return null;
-  return detection.descriptor;
+
+  // Pass 1: fast defaults — catches most well-composed selfies.
+  let detection = await detectWithTiny(canvas, { inputSize: 320, scoreThreshold: 0.4 });
+  if (detection) return detection.descriptor;
+
+  // Pass 2: larger input + lower threshold — helps on small / low-quality faces.
+  detection = await detectWithTiny(canvas, { inputSize: 608, scoreThreshold: 0.2 });
+  if (detection) return detection.descriptor;
+
+  // Pass 3: fall back to SsdMobilenetV1, which is more robust on static images.
+  // Only pay the ~5MB model download cost if we actually need it.
+  if (thorough) {
+    detection = await detectWithSsd(canvas, { minConfidence: 0.25 });
+    if (detection) return detection.descriptor;
+  }
+  return null;
 }
 
 /**
@@ -82,7 +120,7 @@ export async function verifyFaceAgainstId({ idFrontFile, selfieFile }) {
   await loadModels();
 
   const [idDesc, selfieDesc] = await Promise.all([
-    getDescriptor(idFrontFile),
+    getDescriptor(idFrontFile, { thorough: true }),
     getDescriptor(selfieFile),
   ]);
 
@@ -92,7 +130,7 @@ export async function verifyFaceAgainstId({ idFrontFile, selfieFile }) {
       score: 0,
       idHadFace: false,
       selfieHadFace: !!selfieDesc,
-      message: 'No face detected on the front of the ID. Please upload a clearer photo where the face on the card is visible.',
+      message: 'Could not find a face on the ID photo. Retake the ID card with the photo area filling more of the frame, good lighting, and no glare.',
     };
   }
   if (!selfieDesc) {
