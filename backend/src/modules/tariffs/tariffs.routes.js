@@ -12,7 +12,7 @@ router.get('/', asyncHandler(async (req, res) => {
   if (req.query.type)       { conds.push('t.tariff_type = :type');       params.type = req.query.type; }
 
   ok(res, await query(
-    `SELECT t.tariff_id, t.tariff_type, t.name, t.rate, t.unit, t.valid_from,
+    `SELECT t.tariff_id, t.tariff_type, t.rate, t.unit, t.valid_from,
             o.operator_name, o.operator_id
      FROM tariffs t
      LEFT JOIN operators o ON o.operator_id = t.operator_id

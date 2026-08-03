@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate }         from 'react-router-dom';
+import { useNavigate, Link }   from 'react-router-dom';
 import {
   Box, Button, Container, Paper, Stack, Stepper, Step, StepLabel,
   Typography, Alert, AlertTitle, CircularProgress, TextField, MenuItem,
@@ -263,7 +263,7 @@ function DiagnosticsPanel({ diag, loading, onRunSpeedTest, speedTesting, speedPh
               : `unavailable (${diag.geo?.reason || 'unknown'})`}
           </Typography>
 
-          <Typography variant="caption" color="text.secondary">Connection</Typography>
+          <Typography variant="caption" color="text.secondary">Connection (est.)</Typography>
           <Typography variant="caption" fontFamily="monospace">
             {diag.connection?.available
               ? `${(diag.connection.effectiveType || '?').toUpperCase()} · ${diag.connection.downlinkMbps ?? '?'} Mbps · ${diag.connection.rttMs ?? '?'} ms`
@@ -305,7 +305,9 @@ function DiagnosticsPanel({ diag, loading, onRunSpeedTest, speedTesting, speedPh
       </Box>
 
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, fontStyle: 'italic' }}>
-        This information helps NatCA investigate the issue. Radio-level details (signal strength, band) require the mobile app.
+        Connection type shown is a browser estimate based on measured throughput — tap
+        &ldquo;Run speed test&rdquo; for actual Mbps. Radio-level details (signal strength,
+        band) require the mobile app.
       </Typography>
     </Paper>
   );
