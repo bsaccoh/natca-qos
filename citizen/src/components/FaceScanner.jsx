@@ -336,23 +336,36 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
           </Typography>
         )}
 
-        <Stack direction="row" spacing={1.5} sx={{ mt: 3, width: '100%' }}>
+        <Stack direction="row" spacing={1} sx={{ mt: 3, width: '100%' }}>
           {isDone ? (
             <>
-              <Button variant="outlined" fullWidth onClick={handleRetake}>Retake</Button>
-              <Button variant="contained" color={phase === 'pass' ? 'success' : 'primary'} fullWidth onClick={handleContinue}>
-                {phase === 'pass' ? 'Continue' : 'Use this photo anyway'}
+              <Button size="small" variant="outlined" fullWidth onClick={handleRetake} sx={{ py: 1.2 }}>
+                Retake
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                color={phase === 'pass' ? 'success' : 'primary'}
+                fullWidth
+                onClick={handleContinue}
+                sx={{ py: 1.2, whiteSpace: 'nowrap' }}
+              >
+                {phase === 'pass' ? 'Continue' : 'Use anyway'}
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outlined" fullWidth onClick={handleClose}>Cancel</Button>
+              <Button size="small" variant="outlined" fullWidth onClick={handleClose} sx={{ py: 1.2 }}>
+                Cancel
+              </Button>
               <Button
+                size="small"
                 variant="contained"
                 fullWidth
                 startIcon={<CameraAltIcon />}
                 disabled={phase !== 'ready' && phase !== 'detecting'}
                 onClick={capture}
+                sx={{ py: 1.2, whiteSpace: 'nowrap' }}
               >
                 Capture Now
               </Button>

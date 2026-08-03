@@ -24,28 +24,52 @@ async function loadModels() {
   await modelsLoading;
 }
 
-async function fileToImage(file) {
-  const url = URL.createObjectURL(file);
-  const img = await new Promise((resolve, reject) => {
-    const el = new Image();
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error('Could not read image'));
-    el.src = url;
-  });
-  // Keep the object URL alive until caller is done — faceapi reads pixel data async.
-  return { img, revoke: () => URL.revokeObjectURL(url) };
+// Load a File into a canvas. Handles JPEG, PNG, WebP, GIF, BMP and (on capable
+// browsers) HEIC — createImageBitmap is much more permissive than <img>.
+// Falls back to an Image element if createImageBitmap rejects.
+async function fileToCanvas(file) {
+  if (!file) throw new Error('No file provided');
+  if (file.type && file.type.startsWith('application/pdf')) {
+    throw new Error('PDFs are not supported for face detection — please upload a JPEG or PNG image of the ID.');
+  }
+  let width, height, source;
+  try {
+    const bitmap = await createImageBitmap(file);
+    width  = bitmap.width;
+    height = bitmap.height;
+    source = bitmap;
+  } catch {
+    const url = URL.createObjectURL(file);
+    try {
+      source = await new Promise((resolve, reject) => {
+        const el = new Image();
+        el.onload  = () => resolve(el);
+        el.onerror = () => reject(new Error(`Image format not supported (${file.type || 'unknown'}). Try a JPEG or PNG.`));
+        el.src = url;
+      });
+      width  = source.naturalWidth;
+      height = source.naturalHeight;
+    } finally {
+      // Revoke after the drawImage below — but we defer via micro-task
+      queueMicrotask(() => URL.revokeObjectURL(url));
+    }
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(source, 0, 0);
+  if (source.close) source.close();
+  return canvas;
 }
 
 async function getDescriptor(file) {
-  const { img, revoke } = await fileToImage(file);
-  try {
-    const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
-    const detection = await faceapi.detectSingleFace(img, opts).withFaceLandmarks().withFaceDescriptor();
-    if (!detection) return null;
-    return detection.descriptor;
-  } finally {
-    revoke();
-  }
+  const canvas = await fileToCanvas(file);
+  const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
+  const detection = await faceapi.detectSingleFace(canvas, opts).withFaceLandmarks().withFaceDescriptor();
+  if (!detection) return null;
+  return detection.descriptor;
 }
 
 /**
