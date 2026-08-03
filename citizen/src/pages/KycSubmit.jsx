@@ -17,6 +17,8 @@ import { get, api }           from '../api/client.js';
 import { useAuth }            from '../auth/AuthContext.jsx';
 import { verifyFaceAgainstId } from '../utils/faceMatch.js';
 import { verifyNinAgainstId }  from '../utils/ninOcr.js';
+import FaceScanner              from '../components/FaceScanner.jsx';
+import CameraAltIcon           from '@mui/icons-material/CameraAlt';
 
 const STEPS = ['Phone & Operator', 'Identity Details', 'Documents', 'Face Photo', 'Review & Submit'];
 
@@ -151,25 +153,57 @@ function Step3({ files, setFile }) {
 }
 
 function Step4({ files, setFile }) {
+  const [scannerOpen, setScannerOpen] = useState(false);
   return (
     <Stack spacing={3} alignItems="center" textAlign="center">
       <Typography variant="subtitle2" color="text.secondary">
-        Take a clear selfie photo for face verification
+        Scan your face for identity verification
       </Typography>
-      <Alert severity="info" sx={{ textAlign: 'left' }}>
+      <Alert severity="info" sx={{ textAlign: 'left', width: '100%' }}>
         <strong>Tips:</strong> face the camera directly, ensure good lighting, remove glasses/hat if possible.
+        The scanner detects your face and captures automatically when you hold still.
       </Alert>
-      <FileField label="Selfie / Face Photo" name="face" capture="user" accept="image/*"
-        value={files.face} onChange={(e) => setFile('face', e.target.files[0])} required />
-      {files.face && (
-        <Box sx={{ mt: 1 }}>
+
+      {files.face ? (
+        <>
           <img
             src={URL.createObjectURL(files.face)}
             alt="Face preview"
-            style={{ width: 160, height: 160, objectFit: 'cover', borderRadius: 8, border: '2px solid #0d9488' }}
+            style={{ width: 200, height: 200, objectFit: 'cover', borderRadius: 12, border: '3px solid #0d9488' }}
           />
-        </Box>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" size="small" startIcon={<CameraAltIcon />} onClick={() => setScannerOpen(true)}>
+              Retake with scanner
+            </Button>
+            <Button component="label" variant="text" size="small">
+              Choose from gallery
+              <input type="file" hidden accept="image/*" onChange={(e) => setFile('face', e.target.files[0])} />
+            </Button>
+          </Stack>
+        </>
+      ) : (
+        <>
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<CameraAltIcon />}
+            onClick={() => setScannerOpen(true)}
+            sx={{ py: 1.5, px: 4 }}
+          >
+            Start Face Scan
+          </Button>
+          <Button component="label" variant="text" size="small">
+            Or choose a photo from gallery
+            <input type="file" hidden accept="image/*" onChange={(e) => setFile('face', e.target.files[0])} />
+          </Button>
+        </>
       )}
+
+      <FaceScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onCapture={(file) => setFile('face', file)}
+      />
     </Stack>
   );
 }
