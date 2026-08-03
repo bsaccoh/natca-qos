@@ -63,7 +63,7 @@ export function createApp() {
         source:             'MOBILE',
         userId:             req.user?.userId,
         ip:                 req.ip,
-      });
+      }, req.app.get('io'));
       res.json({ complaint_id: result.complaint_id, complaint_ref: result.complaint_ref, status: result.status });
     } catch (err) { next(err); }
   });

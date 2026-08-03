@@ -51,7 +51,7 @@ router.post('/submit', optionalAuth, asyncHandler(async (req, res) => {
     source:               z.string().optional(),
   }).parse(req.body);
 
-  ok(res, await svc.submitComplaint({ ...body, userId: req.user?.userId, ip: req.ip }));
+  ok(res, await svc.submitComplaint({ ...body, userId: req.user?.userId, ip: req.ip }, req.app.get('io')));
 }));
 
 router.get('/track/:ref', asyncHandler(async (req, res) => {

@@ -1,4 +1,7 @@
 import { query, queryOne } from '../../config/db.js';
+import { sendSms } from '../../services/sms.js';
+import { sendEmail } from '../../services/email.js';
+import * as templates from './templates.js';
 
 /**
  * Create an in-app notification for a staff user.
@@ -71,6 +74,75 @@ export async function markAllRead(userId) {
     { userId }
   );
   return { marked: Number(count || 0) };
+}
+
+/**
+ * Multi-channel citizen notification (SMS + Email + In-app).
+ * Each channel is fire-and-report — one failure never blocks the others.
+ * Returns an array of channels actually delivered, e.g. ['SMS', 'EMAIL'].
+ */
+export async function notifyCitizen(io, { userId, contact = {}, complaintRef, status, event }) {
+  const delivered = [];
+  const isSubmit = event === 'SUBMITTED';
+  const smsMsg   = (isSubmit ? templates.submissionSms   : templates.statusUpdateSms)({ complaintRef, status });
+  const emailPkg = (isSubmit ? templates.submissionEmail : templates.statusUpdateEmail)({
+    complaintRef, status, citizenName: contact.name,
+  });
+
+  // SMS
+  if (contact.phone) {
+    try {
+      await sendSms(contact.phone, smsMsg);
+      delivered.push('SMS');
+      if (userId) {
+        await query(
+          `INSERT INTO notifications (user_id, type, title, body, data, channel, sent_at)
+           VALUES (:userId, :type, :title, :body, :data, 'SMS', NOW())`,
+          {
+            userId, type: `COMPLAINT_${event}`,
+            title: `SMS: ${complaintRef}`, body: smsMsg,
+            data: JSON.stringify({ complaint_ref: complaintRef, status }),
+          }
+        );
+      }
+    } catch (err) { console.error('[notifyCitizen SMS]', err?.message || err); }
+  }
+
+  // Email
+  if (contact.email) {
+    try {
+      await sendEmail({ to: contact.email, subject: emailPkg.subject, html: emailPkg.html, text: emailPkg.text });
+      delivered.push('EMAIL');
+      if (userId) {
+        await query(
+          `INSERT INTO notifications (user_id, type, title, body, data, channel, sent_at)
+           VALUES (:userId, :type, :title, :body, :data, 'EMAIL', NOW())`,
+          {
+            userId, type: `COMPLAINT_${event}`,
+            title: emailPkg.subject, body: emailPkg.text,
+            data: JSON.stringify({ complaint_ref: complaintRef, status }),
+          }
+        );
+      }
+    } catch (err) { console.error('[notifyCitizen EMAIL]', err?.message || err); }
+  }
+
+  // In-app (only if we know who the user is)
+  if (userId) {
+    try {
+      await createNotification(io, {
+        userId,
+        type: `COMPLAINT_${event}`,
+        title: isSubmit ? 'Complaint received' : 'Complaint status updated',
+        body: smsMsg,
+        data: { complaint_ref: complaintRef, status },
+        channel: 'IN_APP',
+      });
+      delivered.push('IN_APP');
+    } catch (err) { console.error('[notifyCitizen IN_APP]', err?.message || err); }
+  }
+
+  return delivered;
 }
 
 /**

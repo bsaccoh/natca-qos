@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate }         from 'react-router-dom';
 import {
   Box, Button, Container, Paper, Stack, Stepper, Step, StepLabel,
-  Typography, Alert, CircularProgress, TextField, MenuItem,
-  FormControl, InputLabel, Select, Divider, Chip,
+  Typography, Alert, AlertTitle, CircularProgress, TextField, MenuItem,
+  FormControl, InputLabel, Select, Divider, Chip, Snackbar, Slide,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
@@ -371,6 +371,7 @@ export default function SubmitComplaint() {
   const [err, setErr]             = useState('');
   const [submitted, setSubmitted] = useState(null);
   const [copied, setCopied]       = useState(false);
+  const [flash, setFlash]         = useState(null); // { ref, status, notifiedChannels }
 
   const [operators,  setOperators]  = useState([]);
   const [categories, setCategories] = useState([]);
@@ -480,6 +481,8 @@ export default function SubmitComplaint() {
         userId:             user?.userId,
       });
       setSubmitted(res.data);
+      const ref = res.data.complaint_ref || res.data.complaintRef;
+      setFlash({ ref, status: res.data.status, notifiedChannels: res.data.notifiedChannels || [] });
     } catch (ex) {
       setErr(ex.response?.data?.error || 'Submission failed. Please try again.');
     } finally { setLoading(false); }
@@ -491,9 +494,43 @@ export default function SubmitComplaint() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const flashSnackbar = (
+    <Snackbar
+      open={!!flash}
+      autoHideDuration={7000}
+      onClose={() => setFlash(null)}
+      anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      TransitionComponent={Slide}
+    >
+      {flash ? (
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setFlash(null)}
+          sx={{ minWidth: { xs: 300, sm: 420 }, boxShadow: 6 }}
+        >
+          <AlertTitle sx={{ fontWeight: 700 }}>Complaint received</AlertTitle>
+          <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+            <Typography variant="body2">
+              Reference: <strong style={{ fontFamily: 'monospace' }}>{flash.ref}</strong>
+            </Typography>
+            <Typography variant="body2">Status: <strong>{flash.status}</strong></Typography>
+            {flash.notifiedChannels?.length > 0 && (
+              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                Confirmation sent via {flash.notifiedChannels.join(', ')}
+              </Typography>
+            )}
+          </Box>
+        </Alert>
+      ) : <span />}
+    </Snackbar>
+  );
+
   if (submitted) {
     const ref = submitted.complaint_ref || submitted.complaintRef;
     return (
+      <>
+      {flashSnackbar}
       <Container maxWidth="sm" sx={{ py: 8 }}>
         <Paper sx={{ p: 5, textAlign: 'center' }}>
           <CheckCircleOutlineIcon sx={{ fontSize: 72, color: 'success.main', mb: 2 }} />
@@ -519,6 +556,7 @@ export default function SubmitComplaint() {
           </Stack>
         </Paper>
       </Container>
+      </>
     );
   }
 
@@ -538,6 +576,8 @@ export default function SubmitComplaint() {
   ];
 
   return (
+    <>
+    {flashSnackbar}
     <Container maxWidth="sm" sx={{ py: 5 }}>
       <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5 }}>Submit a Complaint</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: isGuest ? 2 : 3 }}>
@@ -569,5 +609,6 @@ export default function SubmitComplaint() {
         )}
       </Stack>
     </Container>
+    </>
   );
 }

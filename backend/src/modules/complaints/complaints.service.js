@@ -34,7 +34,7 @@ export async function submitComplaint({
   contactName, contactPhone, contactEmail,
   networkDiagnostics,
   source = 'WEB', ip,
-}) {
+}, io = null) {
   // If GPS came in via diagnostics and lat/lng weren't passed, promote them
   if (networkDiagnostics?.geo?.latitude && !latitude)  latitude  = networkDiagnostics.geo.latitude;
   if (networkDiagnostics?.geo?.longitude && !longitude) longitude = networkDiagnostics.geo.longitude;
@@ -81,7 +81,35 @@ export async function submitComplaint({
     eventType: 'SUBMITTED', newValue: 'NEW', note: 'Complaint submitted', isPublic: true, actorId: userId,
   });
 
-  return { complaint_id: row.complaint_id, complaint_ref: row.complaint_ref, status: row.status };
+  // Notify the citizen (SMS / email / in-app) — merge guest contact with registered-user contact
+  let notifiedChannels = [];
+  try {
+    const contact = { name: contactName, phone: contactPhone, email: contactEmail };
+    if (userId && (!contact.phone || !contact.email)) {
+      const u = await queryOne(`SELECT full_name, phone, email FROM users WHERE user_id = :id`, { id: userId });
+      if (u) {
+        contact.name  = contact.name  || u.full_name;
+        contact.phone = contact.phone || u.phone;
+        contact.email = contact.email || u.email;
+      }
+    }
+    notifiedChannels = await notifSvc.notifyCitizen(io, {
+      userId,
+      contact,
+      complaintRef: row.complaint_ref,
+      status: row.status,
+      event: 'SUBMITTED',
+    });
+  } catch (err) {
+    console.error('[submitComplaint] notify failed:', err?.message || err);
+  }
+
+  return {
+    complaint_id: row.complaint_id,
+    complaint_ref: row.complaint_ref,
+    status: row.status,
+    notifiedChannels,
+  };
 }
 
 export async function trackComplaint(ref) {
@@ -223,7 +251,7 @@ export async function updateComplaint(id, { status, resolutionNote, internalNote
       eventType: 'STATUS_CHANGE', oldValue: current.status, newValue: status,
       isPublic: true, actorId, actorName,
     });
-    
+
     // Broadcast status change to admin live view
     if (io) {
       notifSvc.broadcastToAdmins(io, 'complaint:updated', {
@@ -231,6 +259,33 @@ export async function updateComplaint(id, { status, resolutionNote, internalNote
         complaint_ref: current.complaint_ref,
         status,
       });
+    }
+
+    // Notify the citizen on meaningful status transitions
+    if (['ACKNOWLEDGED', 'UNDER_REVIEW', 'RESOLVED', 'CLOSED'].includes(status)) {
+      try {
+        const c = await queryOne(
+          `SELECT c.user_id, c.contact_name, c.contact_phone, c.contact_email,
+                  u.full_name AS user_name, u.phone AS user_phone, u.email AS user_email
+             FROM complaints c
+             LEFT JOIN users u ON u.user_id = c.user_id
+            WHERE c.complaint_id = :id`,
+          { id }
+        );
+        if (c) {
+          await notifSvc.notifyCitizen(io, {
+            userId: c.user_id,
+            contact: {
+              name:  c.contact_name  || c.user_name,
+              phone: c.contact_phone || c.user_phone,
+              email: c.contact_email || c.user_email,
+            },
+            complaintRef: current.complaint_ref,
+            status,
+            event: 'STATUS_UPDATE',
+          });
+        }
+      } catch (err) { console.error('[updateComplaint] notify failed:', err?.message || err); }
     }
   }
 
