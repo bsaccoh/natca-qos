@@ -15,11 +15,12 @@ const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/mode
 const DETECT_INTERVAL_MS = 350;
 const STABLE_MS_TO_CAPTURE = 1200;
 
-// CSS animation: green line sweeping top → bottom → top over 2s
+// CSS animation: green line sweeping top → bottom → top over 2.2s.
+// Uses a CSS variable --sweep-distance so we can control the range from JS.
 const scanSweep = keyframes`
-  0%   { transform: translateY(0%);   opacity: 0.9; }
-  50%  { transform: translateY(1400%); opacity: 1;  }
-  100% { transform: translateY(0%);   opacity: 0.9; }
+  0%   { top: 6%;  opacity: 0.9; }
+  50%  { top: 88%; opacity: 1;   }
+  100% { top: 6%;  opacity: 0.9; }
 `;
 
 let modelsLoaded = false;
@@ -233,14 +234,9 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
           <Alert severity="error" sx={{ mb: 2, width: '100%' }}>{message}</Alert>
         )}
 
-        {phase === 'starting' && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 5 }}>
-            <CircularProgress />
-            <Typography variant="body2" color="text.secondary">Loading face scanner…</Typography>
-          </Box>
-        )}
-
-        {phase !== 'starting' && phase !== 'error' && (
+        {/* Circular viewport — always mounted (with black background) once dialog opens,
+             so videoRef is available before we try to attach the stream */}
+        {phase !== 'error' && (
           <Box sx={{
             position: 'relative',
             width: SIZE, height: SIZE,
@@ -255,33 +251,45 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
             bgcolor: 'black',
             boxShadow: 3,
           }}>
-            {/* Live video OR captured still */}
-            {capturedFile ? (
+            {/* Video is always in the DOM (just visually covered by loading spinner
+                 while phase === 'starting'), so the srcObject assignment can find it */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{
+                width: '100%', height: '100%', objectFit: 'cover',
+                transform: 'scaleX(-1)',
+                display: capturedFile ? 'none' : 'block',
+              }}
+            />
+            {capturedFile && (
               <img
                 src={URL.createObjectURL(capturedFile)}
                 alt="Captured face"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
-            ) : (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
-              />
+            )}
+
+            {/* Loading spinner while starting */}
+            {phase === 'starting' && (
+              <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.65)' }}>
+                <CircularProgress sx={{ color: '#fff' }} />
+              </Box>
             )}
 
             {/* Animated scan line — visible only while actively scanning */}
             {isScanning && (
               <Box sx={{
                 position: 'absolute',
-                left: '5%', right: '5%', top: '6%',
+                left: '5%', right: '5%',
                 height: '3px',
                 background: 'linear-gradient(90deg, transparent, #22c55e 20%, #22c55e 80%, transparent)',
                 boxShadow: '0 0 12px 2px rgba(34, 197, 94, 0.7)',
                 animation: `${scanSweep} 2.2s ease-in-out infinite`,
                 borderRadius: 2,
+                pointerEvents: 'none',
               }} />
             )}
 
