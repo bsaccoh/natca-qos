@@ -13,7 +13,8 @@ pool.on('error', (err) => console.error('PG pool error', err));
 function buildQuery(sql, params = {}) {
   const keys = [];
   const values = [];
-  const text = sql.replace(/:([a-zA-Z_]\w*)/g, (_, k) => {
+  // Negative lookbehind (?<!:) prevents matching ::type PostgreSQL cast operators
+  const text = sql.replace(/(?<!:):([a-zA-Z_]\w*)/g, (_, k) => {
     const idx = keys.indexOf(k);
     if (idx >= 0) return `$${idx + 1}`;
     keys.push(k);
