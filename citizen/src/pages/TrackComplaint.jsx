@@ -3,9 +3,12 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Box, Button, Container, Paper, Stack, TextField, Typography,
   Alert, CircularProgress, Chip, Divider, Stepper, Step, StepLabel, StepContent,
+  IconButton,
 } from '@mui/material';
 import SearchIcon        from '@mui/icons-material/Search';
-import { get }           from '../api/client.js';
+import StarIcon          from '@mui/icons-material/Star';
+import StarBorderIcon    from '@mui/icons-material/StarBorder';
+import { get, patch }    from '../api/client.js';
 import { STATUS_COLOR }  from '../theme/theme.js';
 
 function timeSince(ts) {
@@ -15,6 +18,73 @@ function timeSince(ts) {
   if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return new Date(ts).toLocaleDateString();
+}
+
+function RatingForm({ complaintRef, existingRating, existingFeedback }) {
+  const [rating,       setRating]       = useState(existingRating || 0);
+  const [hovered,      setHovered]      = useState(0);
+  const [comment,      setComment]      = useState(existingFeedback || '');
+  const [submitting,   setSubmitting]   = useState(false);
+  const [submitted,    setSubmitted]    = useState(!!existingRating);
+  const [ratingErr,    setRatingErr]    = useState('');
+
+  const submit = async () => {
+    if (!rating) { setRatingErr('Please select a star rating.'); return; }
+    setSubmitting(true); setRatingErr('');
+    try {
+      await patch(`/complaints/track/${complaintRef}/rate`, { rating, feedback: comment.trim() || undefined });
+      setSubmitted(true);
+    } catch (e) {
+      setRatingErr(e.response?.data?.error || 'Failed to submit rating. Please try again.');
+    } finally { setSubmitting(false); }
+  };
+
+  if (submitted) {
+    return (
+      <Alert severity="success" sx={{ borderRadius: 1.5 }}>
+        Thank you for your feedback! Your rating helps us improve service quality.
+      </Alert>
+    );
+  }
+
+  const displayRating = hovered || rating;
+
+  return (
+    <Box>
+      <Typography variant="subtitle2" fontWeight={700} gutterBottom>Rate Your Experience</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        How satisfied were you with how your complaint was handled?
+      </Typography>
+      <Stack direction="row" spacing={0.5} sx={{ mb: 1.5 }}>
+        {[1, 2, 3, 4, 5].map((s) => (
+          <IconButton key={s} size="small"
+            onMouseEnter={() => setHovered(s)} onMouseLeave={() => setHovered(0)}
+            onClick={() => { setRating(s); setRatingErr(''); }}
+            sx={{ color: s <= displayRating ? '#f59e0b' : 'action.disabled', p: 0.5 }}>
+            {s <= displayRating ? <StarIcon fontSize="medium" /> : <StarBorderIcon fontSize="medium" />}
+          </IconButton>
+        ))}
+        {rating > 0 && (
+          <Typography variant="caption" sx={{ alignSelf: 'center', ml: 1, color: 'text.secondary' }}>
+            {['', 'Very dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very satisfied'][rating]}
+          </Typography>
+        )}
+      </Stack>
+      {ratingErr && <Alert severity="error" sx={{ mb: 1.5, py: 0.5, borderRadius: 1.5 }}>{ratingErr}</Alert>}
+      <TextField
+        multiline rows={3} fullWidth
+        label="Comment (optional)"
+        placeholder="Tell us about your experience…"
+        value={comment} onChange={(e) => setComment(e.target.value)}
+        sx={{ mb: 1.5 }}
+      />
+      <Button variant="contained" onClick={submit} disabled={submitting || !rating}
+        startIcon={submitting ? <CircularProgress size={16} /> : null}
+        sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+        {submitting ? 'Submitting…' : 'Submit Feedback'}
+      </Button>
+    </Box>
+  );
 }
 
 export default function TrackComplaint() {
@@ -154,6 +224,19 @@ export default function TrackComplaint() {
           )}
 
           <Divider sx={{ my: 2 }} />
+
+          {/* Rating section — only for resolved/closed complaints */}
+          {['RESOLVED', 'CLOSED'].includes(data.status) && (
+            <>
+              <RatingForm
+                complaintRef={data.complaint_ref}
+                existingRating={data.citizen_rating}
+                existingFeedback={data.citizen_feedback}
+              />
+              <Divider sx={{ my: 2 }} />
+            </>
+          )}
+
           <Button variant="outlined" size="small" onClick={() => navigate('/submit')}>
             Submit another complaint
           </Button>

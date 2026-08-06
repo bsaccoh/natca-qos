@@ -34,4 +34,15 @@ router.get('/operator-benchmark', requireRole(...STAFF, 'OPERATOR_ADMIN'), async
   ok(res, await svc.getOperatorBenchmark());
 }));
 
+router.get('/dashboard-kpis', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (_req, res) => {
+  ok(res, await svc.getDashboardKpis());
+}));
+
+router.get('/feedback', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (req, res) => {
+  ok(res, await svc.getFeedback({
+    limit:      req.query.limit      ? Number(req.query.limit)      : 50,
+    operatorId: req.query.operatorId ? Number(req.query.operatorId) : undefined,
+  }));
+}));
+
 export default router;

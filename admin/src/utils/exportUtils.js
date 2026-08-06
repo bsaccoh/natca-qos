@@ -42,7 +42,10 @@ export function exportExecutivePDF(summaryData) {
   const win = window.open('', '_blank');
   if (!win) return;
 
-  const counts = summaryData?.counts || {};
+  // Accept both old {counts} shape and new {complaintCounts} shape
+  const counts = summaryData?.counts || summaryData?.complaintCounts || {};
+  const kyc    = summaryData?.kycCounts || {};
+  const csat   = summaryData?.csat;
   const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const html = `
@@ -86,8 +89,8 @@ export function exportExecutivePDF(summaryData) {
           <div class="kpi-value">${counts.total || 0}</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Pending Review</div>
-          <div class="kpi-value">${counts.new_count || 0}</div>
+          <div class="kpi-label">Unresolved</div>
+          <div class="kpi-value">${counts.unresolved ?? counts.new_count ?? 0}</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Resolved Cases</div>
@@ -99,11 +102,23 @@ export function exportExecutivePDF(summaryData) {
         </div>
         <div class="kpi-card">
           <div class="kpi-label">SLA Breached</div>
-          <div class="kpi-value">${counts.sla_breached || 0}</div>
+          <div class="kpi-value">${counts.slaBreached ?? counts.sla_breached ?? 0}</div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-label">Closed Cases</div>
-          <div class="kpi-value">${counts.closed || 0}</div>
+          <div class="kpi-label">CSAT Score</div>
+          <div class="kpi-value">${csat ? csat.toFixed(1) + '/5' : '—'}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">KYC Total</div>
+          <div class="kpi-value">${kyc.total || 0}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">KYC Approved</div>
+          <div class="kpi-value">${kyc.approved || 0}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">KYC Pending</div>
+          <div class="kpi-value">${kyc.pending || 0}</div>
         </div>
       </div>
 
@@ -119,13 +134,18 @@ export function exportExecutivePDF(summaryData) {
         <tbody>
           <tr>
             <td>Resolution Rate</td>
-            <td>${counts.total > 0 ? (((counts.resolved + counts.closed) / counts.total) * 100).toFixed(1) : 0}%</td>
+            <td>${counts.total > 0 ? ((counts.resolved / counts.total) * 100).toFixed(1) : 0}%</td>
             <td>Optimal</td>
           </tr>
           <tr>
             <td>SLA Compliance Rate</td>
-            <td>${counts.total > 0 ? (((counts.total - counts.sla_breached) / counts.total) * 100).toFixed(1) : 100}%</td>
-            <td>${counts.sla_breached > 0 ? 'Action Required' : 'Compliant'}</td>
+            <td>${counts.total > 0 ? (((counts.total - (counts.slaBreached ?? counts.sla_breached ?? 0)) / counts.total) * 100).toFixed(1) : 100}%</td>
+            <td>${(counts.slaBreached ?? counts.sla_breached ?? 0) > 0 ? 'Action Required' : 'Compliant'}</td>
+          </tr>
+          <tr>
+            <td>KYC Approval Rate</td>
+            <td>${kyc.total > 0 ? ((kyc.approved / kyc.total) * 100).toFixed(1) : 0}%</td>
+            <td>${kyc.total > 0 ? 'Active' : 'No Data'}</td>
           </tr>
         </tbody>
       </table>

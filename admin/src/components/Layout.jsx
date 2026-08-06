@@ -9,6 +9,7 @@ import DashboardIcon     from '@mui/icons-material/Dashboard';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import VerifiedUserIcon  from '@mui/icons-material/VerifiedUser';
 import BarChartIcon      from '@mui/icons-material/BarChart';
+import StarIcon          from '@mui/icons-material/Star';
 import PeopleIcon        from '@mui/icons-material/People';
 import BusinessIcon      from '@mui/icons-material/Business';
 import QrCodeIcon        from '@mui/icons-material/QrCode';
@@ -40,6 +41,7 @@ const NAV = [
   { section: 'Analytics & Quality' },
   { to: '/analytics', label: 'Analytics',        icon: <BarChartIcon /> },
   { to: '/speed',     label: 'Speed Analytics',  icon: <BarChartIcon /> },
+  { to: '/feedback',  label: 'Customer Feedback', icon: <StarIcon /> },
   { to: '/incidents', label: 'Network Incidents',icon: <WarningIcon /> },
   { section: 'Administration' },
   { to: '/content',   label: 'Content Manager',   icon: <ArticleIcon /> },

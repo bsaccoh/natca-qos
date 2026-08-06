@@ -58,6 +58,14 @@ router.get('/track/:ref', asyncHandler(async (req, res) => {
   ok(res, await svc.trackComplaint(req.params.ref));
 }));
 
+router.patch('/track/:ref/rate', asyncHandler(async (req, res) => {
+  const { rating, feedback } = z.object({
+    rating:   z.number().int().min(1).max(5),
+    feedback: z.string().optional(),
+  }).parse(req.body);
+  ok(res, await svc.rateComplaintByRef(req.params.ref, { rating, feedback }));
+}));
+
 router.get('/categories', asyncHandler(async (_req, res) => {
   ok(res, await dbQuery(`SELECT category_id, name, code, sla_hours, is_financial FROM complaint_categories ORDER BY name`));
 }));

@@ -116,6 +116,7 @@ export async function trackComplaint(ref) {
   const row = await queryOne(
     `SELECT c.complaint_ref, c.issue_type, c.severity, c.status, c.description,
             c.area_detail, c.created_at, c.updated_at, c.resolved_at, c.sla_deadline,
+            c.citizen_rating, c.citizen_feedback,
             o.operator_name, d.name AS district,
             cat.name AS category_name
      FROM complaints c
@@ -332,6 +333,23 @@ export async function rateComplaint(id, { rating, feedback, userId }) {
     `UPDATE complaints SET citizen_rating = :rating, citizen_feedback = :feedback, updated_at = NOW()
      WHERE complaint_id = :id`,
     { id, rating, feedback: feedback || null }
+  );
+  return { rated: true };
+}
+
+export async function rateComplaintByRef(ref, { rating, feedback }) {
+  const c = await queryOne(
+    `SELECT complaint_id, status FROM complaints WHERE complaint_ref = :ref`, { ref }
+  );
+  if (!c) throw ApiError.notFound('Complaint not found');
+  if (!['RESOLVED', 'CLOSED'].includes(c.status)) {
+    throw ApiError.badRequest('Only resolved or closed complaints can be rated');
+  }
+
+  await query(
+    `UPDATE complaints SET citizen_rating = :rating, citizen_feedback = :feedback, updated_at = NOW()
+     WHERE complaint_id = :id`,
+    { id: c.complaint_id, rating, feedback: feedback || null }
   );
   return { rated: true };
 }

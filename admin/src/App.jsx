@@ -13,6 +13,7 @@ import ContentManager     from './pages/ContentManager.jsx';
 import Incidents          from './pages/Incidents.jsx';
 import UssdManager        from './pages/UssdManager.jsx';
 import SecurityCenter     from './pages/SecurityCenter.jsx';
+import Feedback           from './pages/Feedback.jsx';
 import { Box, CircularProgress } from '@mui/material';
 
 function Protected({ children }) {
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="users"         element={<Users />} />
           <Route path="ussd"          element={<UssdManager />} />
           <Route path="security"     element={<SecurityCenter />} />
+          <Route path="feedback"     element={<Feedback />} />
           <Route path="*"             element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
