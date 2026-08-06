@@ -1,32 +1,38 @@
 // Best-effort NIN check via Tesseract.js OCR on the front-of-ID image.
 // Phone-camera photos of ID cards vary wildly; OCR failure is common.
 // We treat that as "unknown", not a hard fail.
+//
+// Sierra Leone NIN format: 8 uppercase letters (e.g. SAXEGTWT).
 
 import Tesseract from 'tesseract.js';
 
-/**
- * Normalise digits from OCR output: strip everything that isn't a digit,
- * then find sequences long enough to plausibly contain the NIN.
- */
-function extractDigitRuns(text, minLen = 6) {
-  const runs = String(text).match(/\d{6,}/g) || [];
-  return runs;
+const NIN_LENGTH = 8;
+
+// Normalise a user-entered NIN: uppercase, letters only.
+function normaliseNin(s) { return String(s).toUpperCase().replace(/[^A-Z]/g, ''); }
+
+// Extract all runs of 8+ consecutive letters from OCR text (uppercased).
+// OCR often misreads O→0 and I→1; we correct those common substitutions.
+function fixOcrSubstitutions(s) {
+  return s.toUpperCase().replace(/0/g, 'O').replace(/1/g, 'I');
 }
 
-function normaliseDigits(s) { return String(s).replace(/\D/g, ''); }
+function extractAlphaRuns(text) {
+  const corrected = fixOcrSubstitutions(text);
+  return corrected.match(/[A-Z]{8,}/g) || [];
+}
 
 /**
  * Search the OCR'd text for the submitted NIN.
  * Returns { ok, matched, message, extractedRuns }.
- * - ok: verdict for gating submission
- *   - true  → NIN was found in the text
- *   - false → text was extracted but NIN was NOT found
- *   - null  → OCR failed to read anything usable; treat as unknown, don't block
+ * - ok: true  → NIN was found in the OCR text
+ *       false → OCR text extracted but NIN NOT found
+ *       null  → OCR failed / nothing readable; treat as unknown, don't block
  */
 export async function verifyNinAgainstId({ idFrontFile, nin }) {
-  const cleanNin = normaliseDigits(nin);
-  if (!cleanNin || cleanNin.length < 6) {
-    return { ok: null, matched: false, message: 'NIN not provided or too short — skipped', extractedRuns: [] };
+  const cleanNin = normaliseNin(nin);
+  if (!cleanNin || cleanNin.length !== NIN_LENGTH) {
+    return { ok: null, matched: false, message: 'NIN not provided or invalid length — skipped', extractedRuns: [] };
   }
 
   let text = '';
@@ -42,23 +48,23 @@ export async function verifyNinAgainstId({ idFrontFile, nin }) {
     };
   }
 
-  const runs = extractDigitRuns(text);
+  const runs = extractAlphaRuns(text);
   if (!runs.length) {
     return {
       ok: null,
       matched: false,
-      message: 'No number sequences readable on the ID — skipping NIN check.',
+      message: 'No letter sequences readable on the ID — skipping NIN check.',
       extractedRuns: [],
     };
   }
 
-  const matched = runs.some((run) => run.includes(cleanNin) || cleanNin.includes(run));
+  const matched = runs.some((run) => run.includes(cleanNin));
   return {
     ok: matched,
     matched,
     message: matched
       ? `NIN found on ID (${cleanNin})`
-      : `The NIN you entered (${cleanNin}) does not appear on the front of your ID. Please double-check the number or upload a clearer photo.`,
+      : `The NIN you entered (${cleanNin}) does not appear on the front of your ID. Please double-check and upload a clearer photo.`,
     extractedRuns: runs,
   };
 }

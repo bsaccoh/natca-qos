@@ -4,11 +4,30 @@ import path            from 'path';
 import { randomUUID }  from 'crypto';
 import fs              from 'fs';
 import { z }           from 'zod';
+import sharp           from 'sharp';
 import { asyncHandler }        from '../../utils/asyncHandler.js';
 import { ok }                  from '../../utils/http.js';
 import { authenticate, optionalAuth } from '../../middleware/auth.js';
 import { requireRole }         from '../../middleware/rbac.js';
 import * as svc                from './kyc.service.js';
+
+const SERVER_BRIGHTNESS_MIN = 30;
+const SERVER_BRIGHTNESS_MAX = 220;
+
+async function validateFaceQuality(filePath) {
+  const { data, info } = await sharp(filePath)
+    .resize(160, 160, { fit: 'cover' })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  let totalLum = 0;
+  const n = info.width * info.height;
+  for (let i = 0; i < data.length; i += info.channels) {
+    totalLum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  }
+  const avgBrightness = totalLum / n;
+  return avgBrightness >= SERVER_BRIGHTNESS_MIN && avgBrightness <= SERVER_BRIGHTNESS_MAX;
+}
 
 const router = Router();
 
@@ -50,7 +69,7 @@ router.post(
       phone:       z.string().min(6),
       operatorId:  z.coerce.number().int().optional(),
       iccid:       z.string().optional(),
-      nin:         z.string().optional(),
+      nin:         z.string().regex(/^[A-Z]{8}$/, 'NIN must be exactly 8 uppercase letters').optional(),
       firstName:   z.string().optional(),
       lastName:    z.string().optional(),
       dateOfBirth: z.string().optional(),
@@ -65,6 +84,14 @@ router.post(
     const idFrontPath   = req.files?.id_front?.[0]?.path || null;
     const idBackPath    = req.files?.id_back?.[0]?.path  || null;
     const faceImagePath = req.files?.face?.[0]?.path     || null;
+
+    if (faceImagePath) {
+      const qualityOk = await validateFaceQuality(faceImagePath);
+      if (!qualityOk) {
+        fs.unlinkSync(faceImagePath);
+        return res.status(400).json({ error: 'Face image quality too low (too dark or overexposed). Please retake the photo in better lighting.' });
+      }
+    }
 
     ok(res, await svc.submitKyc({
       ...body,

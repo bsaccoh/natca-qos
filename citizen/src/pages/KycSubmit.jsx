@@ -87,7 +87,7 @@ function Step1({ form, set, operators }) {
   );
 }
 
-function Step2({ form, set, districts, chiefdoms }) {
+function Step2({ form, set, setForm, districts, chiefdoms }) {
   return (
     <Stack spacing={2.5}>
       <Typography variant="subtitle2" color="text.secondary">
@@ -97,7 +97,20 @@ function Step2({ form, set, districts, chiefdoms }) {
         <TextField label="First Name *" value={form.firstName} onChange={set('firstName')} fullWidth />
         <TextField label="Last Name *"  value={form.lastName}  onChange={set('lastName')}  fullWidth />
       </Stack>
-      <TextField label="National ID Number (NIN)" value={form.nin} onChange={set('nin')} fullWidth />
+      <TextField
+        label="National ID Number (NIN)"
+        value={form.nin}
+        onChange={(e) => {
+          const val = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 8);
+          setForm((f) => ({ ...f, nin: val }));
+        }}
+        fullWidth
+        inputProps={{ maxLength: 8 }}
+        helperText={form.nin && form.nin.length !== 8
+          ? `NIN must be exactly 8 letters (${form.nin.length}/8)`
+          : '8 uppercase letters — e.g. SAXEGTWT'}
+        error={!!form.nin && form.nin.length !== 8}
+      />
       <TextField label="Date of Birth" type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} fullWidth InputLabelProps={{ shrink: true }} />
       <FormControl fullWidth>
         <InputLabel>Sex</InputLabel>
@@ -473,7 +486,7 @@ export default function KycSubmit() {
 
   const stepComponents = [
     <Step1 form={form} set={set} operators={operators} />,
-    <Step2 form={form} set={set} districts={districts} chiefdoms={chiefdoms} />,
+    <Step2 form={form} set={set} setForm={setFormState} districts={districts} chiefdoms={chiefdoms} />,
     <Step3 files={files} setFile={setFile} />,
     <Step4 files={files} setFile={setFile} />,
     <Step5 form={form} files={files} operators={operators} />,
@@ -506,25 +519,56 @@ export default function KycSubmit() {
         {stepComponents[step]}
       </Paper>
 
-      <Stack direction="row" justifyContent="space-between">
-        <Button disabled={step === 0 || loading} onClick={() => setStep((s) => s - 1)} variant="outlined">
-          Back
-        </Button>
-        {step < STEPS.length - 1 ? (
-          <Button variant="contained" disabled={!canNext()} onClick={() => setStep((s) => s + 1)}>
-            Next
-          </Button>
-        ) : (
-          <Button variant="contained" color="success" disabled={!canSubmit} onClick={submit}>
-            {loading
-              ? <CircularProgress size={22} />
-              : verifying.face || verifying.nin
-                ? 'Running checks…'
-                : (faceResult && !faceResult.ok)
-                  ? 'Face check failed'
-                  : 'Submit Registration'}
-          </Button>
+      <Stack spacing={1}>
+        {step === STEPS.length - 1 && !canSubmit && !loading && (
+          <Typography variant="caption" color="text.secondary" textAlign="right">
+            {verifying.face || verifying.nin
+              ? 'Running identity checks…'
+              : !faceResult
+                ? 'Waiting for face verification to complete'
+                : faceResult.ok === false
+                  ? 'Face check failed — retake your photo or re-run checks above'
+                  : ''}
+          </Typography>
         )}
+        <Stack direction="row" justifyContent="space-between">
+          <Button disabled={step === 0 || loading} onClick={() => setStep((s) => s - 1)} variant="outlined">
+            Back
+          </Button>
+          {step < STEPS.length - 1 ? (
+            <Button variant="contained" disabled={!canNext()} onClick={() => setStep((s) => s + 1)}>
+              Next
+            </Button>
+          ) : (
+            <Stack direction="row" spacing={1} alignItems="center">
+              {faceResult && !faceResult.ok && !verifying.face && (
+                <Button
+                  variant="text"
+                  color="warning"
+                  size="small"
+                  disabled={loading}
+                  onClick={submit}
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  Submit anyway
+                </Button>
+              )}
+              <Button
+                variant="contained"
+                color="success"
+                disabled={!canSubmit || loading}
+                onClick={submit}
+                sx={{ minWidth: 160 }}
+              >
+                {loading
+                  ? <CircularProgress size={22} color="inherit" />
+                  : verifying.face || verifying.nin
+                    ? 'Checking…'
+                    : 'Submit Registration'}
+              </Button>
+            </Stack>
+          )}
+        </Stack>
       </Stack>
     </Container>
     </>

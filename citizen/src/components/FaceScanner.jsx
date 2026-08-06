@@ -23,6 +23,11 @@ const scanSweep = keyframes`
   100% { top: 6%;  opacity: 0.9; }
 `;
 
+const SCORE_THRESHOLD    = 0.65;
+const BRIGHTNESS_MIN     = 40;
+const BRIGHTNESS_MAX     = 215;
+const BLUR_VAR_THRESHOLD = 80;
+
 let modelsLoaded = false;
 let modelsLoading = null;
 async function loadDetectorModel() {
@@ -32,6 +37,36 @@ async function loadDetectorModel() {
       .then(() => { modelsLoaded = true; });
   }
   await modelsLoading;
+}
+
+function computeBrightness(imageData) {
+  const { data } = imageData;
+  let total = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    total += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  }
+  return total / (data.length / 4);
+}
+
+function computeLaplacianVariance(imageData) {
+  const { data, width, height } = imageData;
+  const kernel = [0, 1, 0, 1, -4, 1, 0, 1, 0];
+  let sum = 0, sumSq = 0, n = 0;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      let v = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const idx = ((y + ky) * width + (x + kx)) * 4;
+          const gray = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+          v += gray * kernel[(ky + 1) * 3 + (kx + 1)];
+        }
+      }
+      sum += v; sumSq += v * v; n++;
+    }
+  }
+  const mean = sum / n;
+  return sumSq / n - mean * mean;
 }
 
 export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
@@ -48,6 +83,7 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
   const [faceDetected, setFaceDetected] = useState(false);
   const [capturedFile, setCapturedFile] = useState(null);
   const [matchResult, setMatchResult]   = useState(null);
+  const [qualityMessage, setQualityMessage] = useState('');
 
   const cleanup = useCallback(() => {
     if (streamRef.current) {
@@ -109,7 +145,7 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
   // Detection loop (runs during ready/detecting)
   useEffect(() => {
     if (phase !== 'ready' && phase !== 'detecting') return;
-    const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
+    const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: SCORE_THRESHOLD });
 
     detectTimer.current = setInterval(async () => {
       const video = videoRef.current;
@@ -129,6 +165,39 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
         const largeEnough = b.width > video.videoWidth * 0.20;
 
         if (centered && largeEnough) {
+          // Sample face-box pixels for quality checks
+          try {
+            const qCanvas = document.createElement('canvas');
+            const bw = Math.max(1, Math.round(b.width));
+            const bh = Math.max(1, Math.round(b.height));
+            qCanvas.width = bw; qCanvas.height = bh;
+            const qCtx = qCanvas.getContext('2d');
+            qCtx.drawImage(video, b.x, b.y, bw, bh, 0, 0, bw, bh);
+            const imageData = qCtx.getImageData(0, 0, bw, bh);
+
+            const brightness   = computeBrightness(imageData);
+            const blurVariance = computeLaplacianVariance(imageData);
+
+            if (brightness < BRIGHTNESS_MIN) {
+              stableSince.current = null;
+              setQualityMessage('Too dark — find better lighting');
+              return;
+            }
+            if (brightness > BRIGHTNESS_MAX) {
+              stableSince.current = null;
+              setQualityMessage('Too bright — avoid direct light behind you');
+              return;
+            }
+            if (blurVariance < BLUR_VAR_THRESHOLD) {
+              stableSince.current = null;
+              setQualityMessage('Image blurry — hold still and steady');
+              return;
+            }
+          } catch (_) {
+            // Canvas pixel read failed (e.g. CORS taint) — skip quality check and proceed
+          }
+
+          setQualityMessage('');
           if (!stableSince.current) stableSince.current = Date.now();
           const held = Date.now() - stableSince.current;
           if (held >= STABLE_MS_TO_CAPTURE) {
@@ -140,12 +209,14 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
           setMessage('Hold still — capturing…');
         } else {
           stableSince.current = null;
+          setQualityMessage('');
           setPhase('ready');
           setMessage(largeEnough ? 'Center your face in the circle' : 'Come a bit closer');
         }
       } else {
         setFaceDetected(false);
         stableSince.current = null;
+        setQualityMessage('');
         setPhase('ready');
         setMessage('Position your face within the frame');
       }
@@ -205,6 +276,7 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
     setCapturedFile(null);
     setMatchResult(null);
     setFaceDetected(false);
+    setQualityMessage('');
     setPhase('starting');
     setMessage('Restarting…');
     // Re-trigger camera by faking the modelReady effect
@@ -328,6 +400,11 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
             }}
           >
             {message}
+          </Typography>
+        )}
+        {qualityMessage && isScanning && (
+          <Typography variant="caption" color="warning.main" sx={{ mt: 0.5, textAlign: 'center' }}>
+            {qualityMessage}
           </Typography>
         )}
         {matchResult && typeof matchResult.score === 'number' && (
