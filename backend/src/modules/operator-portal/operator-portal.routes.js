@@ -42,7 +42,7 @@ router.get('/complaints/:id', asyncHandler(async (req, res) => {
 router.patch('/complaints/:id/respond', asyncHandler(async (req, res) => {
   const { note, status } = z.object({
     note:   z.string().min(1),
-    status: z.enum(['RESOLVED', 'UNDER_REVIEW', 'ESCALATED']).optional(),
+    status: z.enum(['RESOLVED', 'UNDER_REVIEW', 'ESCALATED', 'CLOSED']).optional(),
   }).parse(req.body);
 
   // Verify ownership
@@ -50,9 +50,10 @@ router.patch('/complaints/:id/respond', asyncHandler(async (req, res) => {
   if (!c) throw ApiError.notFound('Complaint not found');
   if (String(c.operator_id) !== String(req.user.operatorId)) throw ApiError.forbidden();
 
+  const io = req.app.get('io');
   await complaintSvc.addNote(req.params.id, { note, isPublic: false, actorId: req.user.userId });
   if (status) {
-    await complaintSvc.updateComplaint(req.params.id, { status, actorId: req.user.userId });
+    await complaintSvc.updateComplaint(req.params.id, { status, actorId: req.user.userId }, io);
   }
 
   ok(res, { responded: true });

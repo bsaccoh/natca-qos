@@ -104,6 +104,26 @@ export async function submitComplaint({
     console.error('[submitComplaint] notify failed:', err?.message || err);
   }
 
+  // Notify operator admins so the complaint appears in their portal instantly
+  try {
+    await notifSvc.notifyOperator(io, {
+      operatorId,
+      complaintRef: row.complaint_ref,
+      issueType,
+    });
+  } catch (err) {
+    console.error('[submitComplaint] notifyOperator failed:', err?.message || err);
+  }
+
+  // Broadcast to NatCA admin dashboard
+  notifSvc.broadcastToAdmins(io, 'complaint:new', {
+    complaint_id: row.complaint_id,
+    complaint_ref: row.complaint_ref,
+    issue_type: issueType,
+    severity,
+    operator_id: operatorId,
+  });
+
   return {
     complaint_id: row.complaint_id,
     complaint_ref: row.complaint_ref,

@@ -99,6 +99,11 @@ export function createApp() {
     socket.on('leave:complaint', (complaintId) => {
       socket.leave(`complaint:${complaintId}`);
     });
+
+    // Operator joins their operator-specific room
+    socket.on('join:operator', (operatorId) => {
+      socket.join(`operator:${operatorId}`);
+    });
   });
 
   return { app, httpServer };

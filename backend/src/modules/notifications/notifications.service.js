@@ -30,6 +30,25 @@ export function broadcastToAdmins(io, event, payload) {
   if (io) io.to('admin').emit(event, payload);
 }
 
+export async function notifyOperator(io, { operatorId, complaintRef, issueType }) {
+  if (!operatorId) return;
+  const admins = await query(
+    `SELECT u.user_id FROM users u JOIN roles r ON r.role_id = u.role_id
+     WHERE r.role_key = 'OPERATOR_ADMIN' AND u.operator_id = :operatorId AND u.is_active = TRUE`,
+    { operatorId }
+  );
+  for (const { user_id } of admins) {
+    await createNotification(io, {
+      userId: user_id,
+      type: 'NEW_COMPLAINT',
+      title: 'New complaint received',
+      body: `${complaintRef}: ${issueType || 'Customer complaint'}`,
+      data: { complaint_ref: complaintRef },
+    });
+  }
+  if (io) io.to(`operator:${operatorId}`).emit('complaint:new', { complaint_ref: complaintRef, issueType });
+}
+
 /**
  * List notifications for a user (unread first, then recent).
  */
