@@ -110,6 +110,16 @@ export async function getAdvanced() {
 }
 
 export async function getDashboardKpis() {
+  const [todayRow] = await query(`
+    SELECT
+      SUM(CASE WHEN DATE(created_at) = CURRENT_DATE                   THEN 1 ELSE 0 END)::int AS today_new,
+      SUM(CASE WHEN DATE(created_at) = CURRENT_DATE - 1               THEN 1 ELSE 0 END)::int AS yesterday_new,
+      SUM(CASE WHEN status IN ('RESOLVED','CLOSED') AND DATE(resolved_at) = CURRENT_DATE  THEN 1 ELSE 0 END)::int AS today_resolved,
+      SUM(CASE WHEN status IN ('RESOLVED','CLOSED') AND DATE(resolved_at) = CURRENT_DATE - 1 THEN 1 ELSE 0 END)::int AS yesterday_resolved,
+      SUM(CASE WHEN sla_deadline < NOW() AND status NOT IN ('RESOLVED','CLOSED') AND DATE(created_at) = CURRENT_DATE THEN 1 ELSE 0 END)::int AS today_breached
+    FROM complaints
+  `);
+
   const [
     complaintCounts,
     complaintsByOperator,
@@ -209,6 +219,13 @@ export async function getDashboardKpis() {
     })),
     ratingDistribution: ratingDistribution.map(r => ({ rating: Number(r.rating), count: Number(r.count) })),
     feedbackByOperator: feedbackByOperator.map(r => ({ operator: r.operator, avg_rating: Number(r.avg_rating), count: Number(r.count) })),
+    todayCounts: {
+      newComplaints:      Number(todayRow?.today_new       || 0),
+      yesterdayNew:       Number(todayRow?.yesterday_new   || 0),
+      resolved:           Number(todayRow?.today_resolved  || 0),
+      yesterdayResolved:  Number(todayRow?.yesterday_resolved || 0),
+      slaBreached:        Number(todayRow?.today_breached  || 0),
+    },
   };
 }
 

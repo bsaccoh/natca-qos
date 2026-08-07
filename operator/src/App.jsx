@@ -6,6 +6,8 @@ import Dashboard          from './pages/Dashboard.jsx';
 import Complaints         from './pages/Complaints.jsx';
 import ComplaintDetail     from './pages/ComplaintDetail.jsx';
 import Kyc                from './pages/Kyc.jsx';
+import Profile            from './pages/Profile.jsx';
+import { ToastProvider }  from './components/ToastContext.jsx';
 import { Box, CircularProgress } from '@mui/material';
 
 function Protected({ children }) {
@@ -17,6 +19,7 @@ function Protected({ children }) {
 
 export default function App() {
   return (
+    <ToastProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -25,9 +28,11 @@ export default function App() {
           <Route path="complaints"        element={<Complaints />} />
           <Route path="complaints/:id"    element={<ComplaintDetail />} />
           <Route path="kyc"               element={<Kyc />} />
+          <Route path="profile"           element={<Profile />} />
           <Route path="*"                 element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   );
 }

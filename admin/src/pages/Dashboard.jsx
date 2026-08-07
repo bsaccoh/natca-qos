@@ -160,6 +160,45 @@ export default function Dashboard() {
         />
       </Box>
 
+      {/* ── Today vs Yesterday strip ── */}
+      {kpis?.todayCounts && (() => {
+        const tc = kpis.todayCounts;
+        const items = [
+          { label: 'New today',      value: tc.newComplaints, prev: tc.yesterdayNew,      good: false },
+          { label: 'Resolved today', value: tc.resolved,      prev: tc.yesterdayResolved, good: true  },
+          { label: 'SLA breached',   value: tc.slaBreached,   prev: null,                 good: false },
+        ];
+        return (
+          <Paper variant="outlined" sx={{ px: 2, py: 1.5, mb: 3, borderRadius: 1.5 }}>
+            <Stack direction="row" spacing={0} divider={<Divider orientation="vertical" flexItem />}
+              sx={{ flexWrap: 'wrap', gap: 0 }}>
+              <Typography variant="overline" color="text.disabled" sx={{ alignSelf: 'center', pr: 2 }}>Today</Typography>
+              {items.map((item) => {
+                const diff = item.prev != null ? item.value - item.prev : null;
+                const up = diff > 0;
+                const diffColor = diff === 0 ? 'text.disabled'
+                  : (item.good ? (up ? 'success.main' : 'error.main') : (up ? 'error.main' : 'success.main'));
+                return (
+                  <Stack key={item.label} direction="row" spacing={1} alignItems="center" sx={{ px: 2, py: 0.5 }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" display="block">{item.label}</Typography>
+                      <Stack direction="row" alignItems="baseline" spacing={0.75}>
+                        <Typography variant="h6" fontWeight={700} lineHeight={1}>{item.value}</Typography>
+                        {diff != null && (
+                          <Typography variant="caption" fontWeight={700} color={diffColor}>
+                            {diff > 0 ? `▲${diff}` : diff < 0 ? `▼${Math.abs(diff)}` : '—'} vs yesterday
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Box>
+                  </Stack>
+                );
+              })}
+            </Stack>
+          </Paper>
+        );
+      })()}
+
       {/* ── Row: Trend + Category ── */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2,1fr)' }, gap: 3, mb: 3 }}>
 

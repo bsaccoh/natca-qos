@@ -18,6 +18,7 @@ import SlaAlerts          from './pages/SlaAlerts.jsx';
 import ComplianceReport   from './pages/ComplianceReport.jsx';
 import MyQueue            from './pages/MyQueue.jsx';
 import AlertSettings      from './pages/AlertSettings.jsx';
+import { ToastProvider } from './components/ToastContext.jsx';
 import { Box, CircularProgress } from '@mui/material';
 
 function Protected({ children }) {
@@ -29,6 +30,7 @@ function Protected({ children }) {
 
 export default function App() {
   return (
+    <ToastProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -53,5 +55,6 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   );
 }

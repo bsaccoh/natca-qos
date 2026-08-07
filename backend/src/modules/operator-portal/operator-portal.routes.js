@@ -119,7 +119,28 @@ router.get('/analytics', asyncHandler(async (req, res) => {
      GROUP BY status ORDER BY count DESC`,
     { opId: req.user.operatorId }
   );
-  ok(res, { complaints: complaintCounts, kyc: kycCounts, trend, statusBreakdown });
+  const [weekRow] = await query(
+    `SELECT
+       SUM(CASE WHEN created_at >= date_trunc('week', CURRENT_DATE) THEN 1 ELSE 0 END)::int AS this_week,
+       SUM(CASE WHEN created_at >= date_trunc('week', CURRENT_DATE) - INTERVAL '7 days'
+                 AND created_at <  date_trunc('week', CURRENT_DATE) THEN 1 ELSE 0 END)::int AS last_week,
+       SUM(CASE WHEN status IN ('RESOLVED','CLOSED')
+                 AND created_at >= date_trunc('week', CURRENT_DATE) THEN 1 ELSE 0 END)::int AS this_week_resolved,
+       SUM(CASE WHEN status IN ('RESOLVED','CLOSED')
+                 AND created_at >= date_trunc('week', CURRENT_DATE) - INTERVAL '7 days'
+                 AND created_at <  date_trunc('week', CURRENT_DATE) THEN 1 ELSE 0 END)::int AS last_week_resolved
+     FROM complaints WHERE operator_id = :opId`,
+    { opId: req.user.operatorId }
+  );
+  ok(res, {
+    complaints: complaintCounts, kyc: kycCounts, trend, statusBreakdown,
+    weeklyDelta: {
+      thisWeek:         Number(weekRow?.this_week          || 0),
+      lastWeek:         Number(weekRow?.last_week          || 0),
+      thisWeekResolved: Number(weekRow?.this_week_resolved || 0),
+      lastWeekResolved: Number(weekRow?.last_week_resolved || 0),
+    },
+  });
 }));
 
 export default router;

@@ -61,6 +61,14 @@ router.put('/profile', authenticate, asyncHandler(async (req, res) => {
   ok(res, await svc.updateProfile(req.user.userId, body));
 }));
 
+router.patch('/password', authenticate, asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = z.object({
+    currentPassword: z.string().min(1),
+    newPassword:     z.string().min(8),
+  }).parse(req.body);
+  ok(res, await svc.changePassword(req.user.userId, { currentPassword, newPassword }));
+}));
+
 router.post('/reset-password/request', asyncHandler(async (req, res) => {
   const { phone } = z.object({ phone: z.string() }).parse(req.body);
   ok(res, await svc.resetPasswordRequest(phone));

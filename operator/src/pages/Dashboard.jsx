@@ -17,7 +17,20 @@ import { get } from '../api/client.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { STATUS_COLOR } from '../theme/theme.js';
 
-function KpiCard({ title, value, sub, icon, color, onClick }) {
+function Delta({ current, previous }) {
+  if (previous == null || current == null) return null;
+  const diff = current - previous;
+  if (diff === 0) return <Typography variant="caption" color="text.disabled" sx={{ ml: 0.5 }}>—</Typography>;
+  const up = diff > 0;
+  return (
+    <Typography variant="caption" fontWeight={700}
+      color={up ? 'error.main' : 'success.main'} sx={{ ml: 0.5 }}>
+      {up ? '▲' : '▼'} {Math.abs(diff)} vs last wk
+    </Typography>
+  );
+}
+
+function KpiCard({ title, value, sub, icon, color, onClick, delta }) {
   return (
     <Paper sx={{ p: 2.5, cursor: onClick ? 'pointer' : 'default', '&:hover': onClick ? { borderColor: color } : {} }} onClick={onClick}>
       <Stack direction="row" spacing={2} alignItems="center">
@@ -26,7 +39,10 @@ function KpiCard({ title, value, sub, icon, color, onClick }) {
         </Box>
         <Box>
           <Typography variant="caption" color="text.secondary">{title}</Typography>
-          <Typography variant="h4" fontWeight={700}>{value ?? <Skeleton width={50} />}</Typography>
+          <Stack direction="row" alignItems="baseline" spacing={0}>
+            <Typography variant="h4" fontWeight={700}>{value ?? <Skeleton width={50} />}</Typography>
+            {delta}
+          </Stack>
           {sub && <Typography variant="caption" color="text.disabled">{sub}</Typography>}
         </Box>
       </Stack>
@@ -65,7 +81,8 @@ export default function Dashboard() {
     return () => socket.off('complaint:new', refresh);
   }, [socket]);
 
-  const c = data?.complaints || {};
+  const c  = data?.complaints || {};
+  const wd = data?.weeklyDelta || {};
   const trend = (data?.trend || []).map((d) => ({ ...d, day: d.day?.slice(5) }));
 
   const pieData = (data?.statusBreakdown || [])
@@ -91,7 +108,8 @@ export default function Dashboard() {
       {/* KPI row */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 6, md: 3 }}>
-          <KpiCard title="Total Complaints" value={c.total} icon={<ReportProblemIcon sx={{ color: '#3b82f6' }} />} color="#3b82f6" />
+          <KpiCard title="Total Complaints" value={c.total} icon={<ReportProblemIcon sx={{ color: '#3b82f6' }} />} color="#3b82f6"
+            delta={<Delta current={wd.thisWeek} previous={wd.lastWeek} />} />
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
           <KpiCard title="New / Open" value={c.new_count} icon={<PendingIcon sx={{ color: '#ef4444' }} />} color="#ef4444"
@@ -99,7 +117,8 @@ export default function Dashboard() {
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
           <KpiCard title="Resolved" value={c.resolved} icon={<CheckCircleIcon sx={{ color: '#10b981' }} />} color="#10b981"
-            onClick={() => navigate('/complaints?status=RESOLVED')} />
+            onClick={() => navigate('/complaints?status=RESOLVED')}
+            delta={<Delta current={wd.thisWeekResolved} previous={wd.lastWeekResolved} />} />
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
           <KpiCard title="SLA Breached" value={c.sla_breached} icon={<WarningIcon sx={{ color: '#f59e0b' }} />} color="#f59e0b" />

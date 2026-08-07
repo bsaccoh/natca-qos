@@ -3,14 +3,18 @@ import {
   Box, Paper, Typography, Grid, Stack, Chip, Tooltip, Button, IconButton,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination,
   FormControl, InputLabel, Select, MenuItem, TextField, Drawer, Divider,
-  CircularProgress, Alert,
+  CircularProgress, Alert, Checkbox, Collapse,
 } from '@mui/material';
-import ReportProblemIcon from '@mui/icons-material/ReportProblem';
-import CloseIcon         from '@mui/icons-material/Close';
-import DownloadIcon      from '@mui/icons-material/Download';
-import RefreshIcon       from '@mui/icons-material/Refresh';
+import ReportProblemIcon  from '@mui/icons-material/ReportProblem';
+import CloseIcon          from '@mui/icons-material/Close';
+import DownloadIcon       from '@mui/icons-material/Download';
+import RefreshIcon        from '@mui/icons-material/Refresh';
+import ArrowUpwardIcon    from '@mui/icons-material/ArrowUpward';
+import PersonAddIcon      from '@mui/icons-material/PersonAdd';
+import CheckBoxIcon       from '@mui/icons-material/CheckBox';
 import { get, patch, api } from '../api/client.js';
-import PageHeader        from '../components/PageHeader.jsx';
+import PageHeader         from '../components/PageHeader.jsx';
+import { useToast }       from '../components/ToastContext.jsx';
 import { STATUS_COLOR, SEVERITY_COLOR } from '../theme/theme.js';
 
 function timeSince(ts) {
@@ -271,6 +275,7 @@ function ComplaintDrawer({ complaint, onClose, onUpdated, operators, users }) {
 }
 
 export default function Complaints() {
+  const { showToast } = useToast();
   const [complaints, setComplaints] = useState([]);
   const [total, setTotal]           = useState(0);
   const [loading, setLoading]       = useState(true);
@@ -280,6 +285,9 @@ export default function Complaints() {
   const [page, setPage]             = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [filters, setFilters]       = useState({ status: '', operatorId: '', severity: '', search: '' });
+  const [checkedIds, setCheckedIds] = useState(new Set());
+  const [bulkBusy, setBulkBusy]     = useState(false);
+  const [bulkAssignId, setBulkAssignId] = useState('');
 
   const setF = (k) => (e) => { setFilters((f) => ({ ...f, [k]: e.target.value })); setPage(0); };
 
@@ -305,10 +313,56 @@ export default function Complaints() {
   }, []);
 
   const openDetail = async (c) => {
+    if (checkedIds.size > 0) return; // in bulk-select mode, clicks toggle selection
     try {
       const r = await get(`/complaints/${c.complaint_id}`);
       setSelected(r.data);
     } catch { setSelected(c); }
+  };
+
+  const toggleCheck = (id) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (checkedIds.size === complaints.length) {
+      setCheckedIds(new Set());
+    } else {
+      setCheckedIds(new Set(complaints.map((c) => c.complaint_id)));
+    }
+  };
+
+  const bulkEscalate = async () => {
+    setBulkBusy(true);
+    try {
+      await Promise.all([...checkedIds].map((id) => patch(`/complaints/${id}`, { status: 'ESCALATED' })));
+      showToast(`${checkedIds.size} complaint(s) escalated`, 'success');
+      setCheckedIds(new Set());
+      load();
+    } catch {
+      showToast('Bulk escalate failed', 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkAssign = async () => {
+    if (!bulkAssignId) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all([...checkedIds].map((id) => patch(`/complaints/${id}/assign`, { officerId: Number(bulkAssignId) })));
+      showToast(`${checkedIds.size} complaint(s) assigned`, 'success');
+      setCheckedIds(new Set()); setBulkAssignId('');
+      load();
+    } catch {
+      showToast('Bulk assign failed', 'error');
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   const downloadCsv = async () => {
@@ -366,10 +420,53 @@ export default function Complaints() {
         )}
       </Stack>
 
+      {/* Bulk action bar */}
+      <Collapse in={checkedIds.size > 0}>
+        <Paper variant="outlined" sx={{ mb: 1, px: 2, py: 1, bgcolor: 'primary.50', border: 1, borderColor: 'primary.main', borderRadius: 1.5 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <CheckBoxIcon color="primary" fontSize="small" />
+              <Typography variant="body2" fontWeight={700} color="primary.main">
+                {checkedIds.size} selected
+              </Typography>
+            </Stack>
+            <Divider orientation="vertical" flexItem />
+            <Button size="small" variant="contained" color="warning" disableElevation
+              startIcon={bulkBusy ? <CircularProgress size={14} /> : <ArrowUpwardIcon fontSize="small" />}
+              onClick={bulkEscalate} disabled={bulkBusy}>
+              Escalate All
+            </Button>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>Assign to officer</InputLabel>
+                <Select value={bulkAssignId} label="Assign to officer"
+                  onChange={(e) => setBulkAssignId(e.target.value)}>
+                  <MenuItem value="">— select —</MenuItem>
+                  {users.map((u) => <MenuItem key={u.user_id} value={u.user_id}>{u.full_name}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <Button size="small" variant="outlined" startIcon={<PersonAddIcon fontSize="small" />}
+                onClick={bulkAssign} disabled={bulkBusy || !bulkAssignId}>
+                Assign
+              </Button>
+            </Stack>
+            <Button size="small" onClick={() => setCheckedIds(new Set())} sx={{ ml: 'auto' }}>
+              Clear selection
+            </Button>
+          </Stack>
+        </Paper>
+      </Collapse>
+
       <TableContainer component={Paper} elevation={0}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: 'action.hover' }}>
+              <TableCell padding="checkbox">
+                <Checkbox size="small"
+                  indeterminate={checkedIds.size > 0 && checkedIds.size < complaints.length}
+                  checked={complaints.length > 0 && checkedIds.size === complaints.length}
+                  onChange={toggleAll} />
+              </TableCell>
               <TableCell>Reference</TableCell>
               <TableCell>Issue</TableCell>
               <TableCell>Operator</TableCell>
@@ -382,17 +479,23 @@ export default function Complaints() {
           </TableHead>
           <TableBody>
             {loading && (
-              <TableRow><TableCell colSpan={8} align="center"><CircularProgress size={24} sx={{ my: 2 }} /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} align="center"><CircularProgress size={24} sx={{ my: 2 }} /></TableCell></TableRow>
             )}
             {!loading && complaints.length === 0 && (
-              <TableRow><TableCell colSpan={8} align="center">
+              <TableRow><TableCell colSpan={9} align="center">
                 <Typography color="text.secondary" sx={{ py: 4 }}>No complaints found</Typography>
               </TableCell></TableRow>
             )}
             {complaints.map((c) => {
               const sl = slaLabel(c);
+              const checked = checkedIds.has(c.complaint_id);
               return (
-                <TableRow key={c.complaint_id} hover sx={{ cursor: 'pointer' }} onClick={() => openDetail(c)}>
+                <TableRow key={c.complaint_id} hover selected={checked}
+                  sx={{ cursor: 'pointer', bgcolor: checked ? 'action.selected' : 'transparent' }}
+                  onClick={() => checkedIds.size > 0 ? toggleCheck(c.complaint_id) : openDetail(c)}>
+                  <TableCell padding="checkbox" onClick={(e) => { e.stopPropagation(); toggleCheck(c.complaint_id); }}>
+                    <Checkbox size="small" checked={checked} onChange={() => toggleCheck(c.complaint_id)} />
+                  </TableCell>
                   <TableCell><Typography variant="caption" fontFamily="monospace">{c.complaint_ref}</Typography></TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight={600}>{c.issue_type?.replace(/_/g, ' ')}</Typography>

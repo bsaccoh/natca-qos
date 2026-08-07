@@ -22,10 +22,13 @@ import { get, patch }    from '../api/client.js';
 const FULL = 240;
 const MINI = 64;
 
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+
 const NAV = [
   { to: '/',           label: 'Dashboard',  icon: <DashboardIcon /> },
   { to: '/complaints', label: 'Complaints', icon: <ReportProblemIcon /> },
   { to: '/kyc',        label: 'KYC / SIM',  icon: <VerifiedUserIcon /> },
+  { to: '/profile',    label: 'My Profile', icon: <AccountCircleIcon /> },
 ];
 
 function NotificationBell({ socket }) {

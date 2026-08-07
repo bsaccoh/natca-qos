@@ -154,6 +154,16 @@ export async function updateProfile(userId, { fullName, email, phone }) {
   return getMe(userId);
 }
 
+export async function changePassword(userId, { currentPassword, newPassword }) {
+  const user = await queryOne(`SELECT password_hash FROM users WHERE user_id = :id`, { id: userId });
+  if (!user) throw ApiError.notFound('User not found');
+  const valid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!valid) throw ApiError.badRequest('Current password is incorrect');
+  const hash = await bcrypt.hash(newPassword, 12);
+  await query(`UPDATE users SET password_hash = :hash, updated_at = NOW() WHERE user_id = :id`, { hash, id: userId });
+  return { changed: true };
+}
+
 export async function resetPasswordRequest(phone) {
   const user = await queryOne(`SELECT user_id FROM users WHERE phone = :phone`, { phone });
   if (!user) return { sent: true }; // don't reveal non-existence

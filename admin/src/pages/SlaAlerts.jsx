@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Box, Paper, Typography, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, Stack, IconButton, Tooltip, Button,
-  Alert, CircularProgress,
+  CircularProgress,
 } from '@mui/material';
 import RefreshIcon    from '@mui/icons-material/Refresh';
 import WarningIcon    from '@mui/icons-material/Warning';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import { get, patch } from '../api/client.js';
+import { useToast }   from '../components/ToastContext.jsx';
 
 const SEVERITY_COLOR = { LOW: 'default', MEDIUM: 'warning', HIGH: 'error', CRITICAL: 'error' };
 
@@ -18,36 +19,33 @@ function fmtOverdue(hours) {
 }
 
 export default function SlaAlerts() {
-  const [rows, setRows]         = useState([]);
-  const [loading, setLoading]   = useState(false);
+  const { showToast } = useToast();
+  const [rows, setRows]             = useState([]);
+  const [loading, setLoading]       = useState(false);
   const [escalating, setEscalating] = useState(null);
-  const [error, setError]       = useState('');
-  const [success, setSuccess]   = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError('');
     try {
       const r = await get('/analytics/sla-alerts');
       setRows(r.data || []);
     } catch {
-      setError('Failed to load SLA alerts.');
+      showToast('Failed to load SLA alerts.', 'error');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => { load(); }, [load]);
 
   const escalate = async (id, ref) => {
     setEscalating(id);
-    setSuccess('');
     try {
       await patch(`/complaints/${id}`, { status: 'ESCALATED', internalNote: 'Auto-escalated via SLA Alert Panel' });
-      setSuccess(`${ref} escalated.`);
+      showToast(`${ref} escalated.`, 'success');
       load();
     } catch {
-      setError(`Failed to escalate ${ref}.`);
+      showToast(`Failed to escalate ${ref}.`, 'error');
     } finally {
       setEscalating(null);
     }
@@ -69,9 +67,6 @@ export default function SlaAlerts() {
           </IconButton>
         </Tooltip>
       </Stack>
-
-      {error   && <Alert severity="error"   sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
       <TableContainer component={Paper}>
         <Table size="small">
