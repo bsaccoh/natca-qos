@@ -116,6 +116,41 @@ router.put('/system-settings', requireRole('SYSTEM_ADMIN'), asyncHandler(async (
   ok(res, { updated: true });
 }));
 
+/* ── Alert settings ──────────────────────────────────────────────────── */
+const ALERT_DEFAULTS = {
+  sla_warning_hours:    24,
+  sla_breach_emails:    [],
+  sla_sms_enabled:      false,
+  notify_new_complaint: true,
+};
+
+router.get('/alert-settings', asyncHandler(async (_req, res) => {
+  const keys = Object.keys(ALERT_DEFAULTS);
+  const rows = await query(`SELECT key, value FROM system_config WHERE key = ANY(:keys)`, { keys });
+  const result = { ...ALERT_DEFAULTS };
+  rows.forEach(r => { result[r.key] = r.value; });
+  ok(res, result);
+}));
+
+router.put('/alert-settings', asyncHandler(async (req, res) => {
+  const allowed = Object.keys(ALERT_DEFAULTS);
+  const updates = Object.entries(req.body).filter(([k]) => allowed.includes(k));
+  for (const [key, value] of updates) {
+    await query(
+      `INSERT INTO system_config (key, value, updated_at)
+       VALUES (:key, :value::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = :value::jsonb, updated_at = NOW()`,
+      { key, value: JSON.stringify(value) }
+    );
+  }
+  await query(
+    `INSERT INTO audit_logs (user_id, action, entity_type, changes, ip_address)
+     VALUES (:uid, 'ALERT_SETTINGS_UPDATED', 'system_config', :ch, :ip)`,
+    { uid: req.user.userId, ch: JSON.stringify({ keys: updates.map(([k]) => k) }), ip: req.ip }
+  );
+  ok(res, { updated: true });
+}));
+
 /* ── Account suspension ──────────────────────────────────────────────── */
 router.patch('/users/:id/suspend', asyncHandler(async (req, res) => {
   const { suspend, reason } = req.body;

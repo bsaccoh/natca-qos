@@ -162,22 +162,23 @@ export async function trackComplaint(ref) {
 
 export async function listComplaints({
   operatorId, status, issueType, districtId, severity, priority,
-  categoryId, dateFrom, dateTo, userId, search,
+  categoryId, dateFrom, dateTo, userId, assignedTo, search,
   limit = 25, offset = 0,
 } = {}) {
   const conds = ['1=1'];
   const params = {};
 
-  if (operatorId)  { conds.push('c.operator_id = :operatorId');   params.operatorId = operatorId; }
-  if (status)      { conds.push('c.status = :status');             params.status = status; }
-  if (issueType)   { conds.push('c.issue_type = :issueType');      params.issueType = issueType; }
-  if (districtId)  { conds.push('c.district_id = :districtId');   params.districtId = districtId; }
-  if (severity)    { conds.push('c.severity = :severity');         params.severity = severity; }
-  if (priority)    { conds.push('c.priority = :priority');         params.priority = priority; }
-  if (categoryId)  { conds.push('c.category_id = :categoryId');   params.categoryId = categoryId; }
-  if (userId)      { conds.push('c.user_id = :userId');            params.userId = userId; }
-  if (dateFrom)    { conds.push('c.created_at >= :dateFrom');      params.dateFrom = dateFrom; }
-  if (dateTo)      { conds.push('c.created_at <= :dateTo');        params.dateTo = dateTo; }
+  if (operatorId)  { conds.push('c.operator_id = :operatorId');         params.operatorId = operatorId; }
+  if (status)      { conds.push('c.status = :status');                   params.status = status; }
+  if (issueType)   { conds.push('c.issue_type = :issueType');            params.issueType = issueType; }
+  if (districtId)  { conds.push('c.district_id = :districtId');         params.districtId = districtId; }
+  if (severity)    { conds.push('c.severity = :severity');               params.severity = severity; }
+  if (priority)    { conds.push('c.priority = :priority');               params.priority = priority; }
+  if (categoryId)  { conds.push('c.category_id = :categoryId');         params.categoryId = categoryId; }
+  if (userId)      { conds.push('c.user_id = :userId');                  params.userId = userId; }
+  if (assignedTo)  { conds.push('c.assigned_officer_id = :assignedTo'); params.assignedTo = assignedTo; }
+  if (dateFrom)    { conds.push('c.created_at >= :dateFrom');            params.dateFrom = dateFrom; }
+  if (dateTo)      { conds.push('c.created_at <= :dateTo');              params.dateTo = dateTo; }
   if (search)      { conds.push(`(c.complaint_ref ILIKE :search OR c.description ILIKE :search)`); params.search = `%${search}%`; }
 
   const where = conds.join(' AND ');

@@ -38,6 +38,14 @@ router.get('/dashboard-kpis', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHand
   ok(res, await svc.getDashboardKpis());
 }));
 
+router.get('/sla-alerts', requireRole(...STAFF), asyncHandler(async (_req, res) => {
+  ok(res, await svc.getSlaAlerts());
+}));
+
+router.get('/operator-compliance', requireRole(...STAFF), asyncHandler(async (_req, res) => {
+  ok(res, await svc.getOperatorCompliance());
+}));
+
 router.get('/feedback', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (req, res) => {
   ok(res, await svc.getFeedback({
     limit:      req.query.limit      ? Number(req.query.limit)      : 50,

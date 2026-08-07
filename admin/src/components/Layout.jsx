@@ -5,25 +5,28 @@ import {
   ListItemText, IconButton, Avatar, Chip, Divider, Tooltip, Stack,
   useMediaQuery, useTheme,
 } from '@mui/material';
-import DashboardIcon     from '@mui/icons-material/Dashboard';
-import ReportProblemIcon from '@mui/icons-material/ReportProblem';
-import VerifiedUserIcon  from '@mui/icons-material/VerifiedUser';
-import BarChartIcon      from '@mui/icons-material/BarChart';
-import StarIcon          from '@mui/icons-material/Star';
-import PeopleIcon        from '@mui/icons-material/People';
-import BusinessIcon      from '@mui/icons-material/Business';
-import QrCodeIcon        from '@mui/icons-material/QrCode';
-import SecurityIcon      from '@mui/icons-material/Security';
-import WarningIcon       from '@mui/icons-material/Warning';
-import ArticleIcon       from '@mui/icons-material/Article';
-import LogoutIcon        from '@mui/icons-material/Logout';
-import Brightness4Icon   from '@mui/icons-material/Brightness4';
-import Brightness7Icon   from '@mui/icons-material/Brightness7';
-import MenuIcon          from '@mui/icons-material/Menu';
-import ChevronLeftIcon   from '@mui/icons-material/ChevronLeft';
-import AccessTimeIcon    from '@mui/icons-material/AccessTime';
-import NotificationsIcon from '@mui/icons-material/Notifications';
-import DoneAllIcon       from '@mui/icons-material/DoneAll';
+import DashboardIcon        from '@mui/icons-material/Dashboard';
+import ReportProblemIcon    from '@mui/icons-material/ReportProblem';
+import VerifiedUserIcon     from '@mui/icons-material/VerifiedUser';
+import BarChartIcon         from '@mui/icons-material/BarChart';
+import StarIcon             from '@mui/icons-material/Star';
+import PeopleIcon           from '@mui/icons-material/People';
+import BusinessIcon         from '@mui/icons-material/Business';
+import QrCodeIcon           from '@mui/icons-material/QrCode';
+import SecurityIcon         from '@mui/icons-material/Security';
+import WarningIcon          from '@mui/icons-material/Warning';
+import ArticleIcon          from '@mui/icons-material/Article';
+import LogoutIcon           from '@mui/icons-material/Logout';
+import Brightness4Icon      from '@mui/icons-material/Brightness4';
+import Brightness7Icon      from '@mui/icons-material/Brightness7';
+import MenuIcon             from '@mui/icons-material/Menu';
+import ChevronLeftIcon      from '@mui/icons-material/ChevronLeft';
+import AccessTimeIcon       from '@mui/icons-material/AccessTime';
+import NotificationsIcon    from '@mui/icons-material/Notifications';
+import DoneAllIcon          from '@mui/icons-material/DoneAll';
+import AssessmentIcon       from '@mui/icons-material/Assessment';
+import InboxIcon            from '@mui/icons-material/Inbox';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { Badge, Popover } from '@mui/material';
 import { useAuth }       from '../auth/AuthContext.jsx';
 import { useColorMode }  from '../theme/ColorMode.jsx';
@@ -33,23 +36,27 @@ const FULL = 248;
 const MINI = 64;
 
 const NAV = [
-  { to: '/',          label: 'Dashboard',    icon: <DashboardIcon /> },
+  { to: '/',            label: 'Dashboard',         icon: <DashboardIcon /> },
   { section: 'Complaints' },
-  { to: '/complaints', label: 'Complaint List', icon: <ReportProblemIcon /> },
+  { to: '/complaints',  label: 'Complaint List',    icon: <ReportProblemIcon /> },
+  { to: '/sla-alerts',  label: 'SLA Alerts',        icon: <WarningIcon />, badge: 'sla' },
+  { to: '/my-queue',    label: 'My Queue',           icon: <InboxIcon />, roles: ['NATCA_ANALYST', 'INSPECTOR'] },
   { section: 'KYC & SIM' },
-  { to: '/kyc',       label: 'KYC Management',  icon: <VerifiedUserIcon /> },
+  { to: '/kyc',         label: 'KYC Management',    icon: <VerifiedUserIcon /> },
   { section: 'Analytics & Quality' },
-  { to: '/analytics', label: 'Analytics',        icon: <BarChartIcon /> },
-  { to: '/speed',     label: 'Speed Analytics',  icon: <BarChartIcon /> },
-  { to: '/feedback',  label: 'Customer Feedback', icon: <StarIcon /> },
-  { to: '/incidents', label: 'Network Incidents',icon: <WarningIcon /> },
+  { to: '/analytics',   label: 'Analytics',          icon: <BarChartIcon /> },
+  { to: '/speed',       label: 'Speed Analytics',    icon: <BarChartIcon /> },
+  { to: '/compliance',  label: 'Compliance Report',  icon: <AssessmentIcon /> },
+  { to: '/feedback',    label: 'Customer Feedback',  icon: <StarIcon /> },
+  { to: '/incidents',   label: 'Network Incidents',  icon: <WarningIcon /> },
   { section: 'Administration' },
-  { to: '/content',   label: 'Content Manager',   icon: <ArticleIcon /> },
-  { to: '/operators', label: 'Operators',         icon: <BusinessIcon /> },
-  { to: '/users',     label: 'Users',             icon: <PeopleIcon /> },
-  { to: '/ussd',      label: 'USSD Codes',        icon: <QrCodeIcon /> },
+  { to: '/content',     label: 'Content Manager',    icon: <ArticleIcon /> },
+  { to: '/operators',   label: 'Operators',          icon: <BusinessIcon /> },
+  { to: '/users',       label: 'Users',              icon: <PeopleIcon /> },
+  { to: '/ussd',        label: 'USSD Codes',         icon: <QrCodeIcon /> },
+  { to: '/alert-settings', label: 'Alert Settings', icon: <NotificationsActiveIcon />, roles: ['SYSTEM_ADMIN', 'NATCA_ADMIN'] },
   { section: 'Security' },
-  { to: '/security',  label: 'Security Center',   icon: <SecurityIcon /> },
+  { to: '/security',    label: 'Security Center',    icon: <SecurityIcon /> },
 ];
 
 function LiveClock({ mode }) {
@@ -224,6 +231,7 @@ export default function Layout() {
               <Divider key={`sec-${i}`} sx={{ my: 1, mx: 1.5 }} />
             );
           }
+          if (item.roles && !item.roles.includes(user?.role)) return null;
           const active = item.to === '/'
             ? location.pathname === '/'
             : location.pathname.startsWith(item.to);

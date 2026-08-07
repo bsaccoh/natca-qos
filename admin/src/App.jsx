@@ -14,6 +14,10 @@ import Incidents          from './pages/Incidents.jsx';
 import UssdManager        from './pages/UssdManager.jsx';
 import SecurityCenter     from './pages/SecurityCenter.jsx';
 import Feedback           from './pages/Feedback.jsx';
+import SlaAlerts          from './pages/SlaAlerts.jsx';
+import ComplianceReport   from './pages/ComplianceReport.jsx';
+import MyQueue            from './pages/MyQueue.jsx';
+import AlertSettings      from './pages/AlertSettings.jsx';
 import { Box, CircularProgress } from '@mui/material';
 
 function Protected({ children }) {
@@ -39,8 +43,12 @@ export default function App() {
           <Route path="operators"     element={<Operators />} />
           <Route path="users"         element={<Users />} />
           <Route path="ussd"          element={<UssdManager />} />
-          <Route path="security"     element={<SecurityCenter />} />
-          <Route path="feedback"     element={<Feedback />} />
+          <Route path="security"      element={<SecurityCenter />} />
+          <Route path="feedback"      element={<Feedback />} />
+          <Route path="sla-alerts"    element={<SlaAlerts />} />
+          <Route path="compliance"    element={<ComplianceReport />} />
+          <Route path="my-queue"      element={<MyQueue />} />
+          <Route path="alert-settings" element={<AlertSettings />} />
           <Route path="*"             element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

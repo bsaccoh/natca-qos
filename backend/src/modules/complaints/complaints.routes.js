@@ -111,6 +111,7 @@ router.get('/', requireRole(...STAFF, 'OPERATOR_ADMIN', 'CITIZEN'), asyncHandler
     dateFrom:   req.query.dateFrom,
     dateTo:     req.query.dateTo,
     search:     req.query.search,
+    assignedTo: req.query.assignedTo ? Number(req.query.assignedTo) : undefined,
     limit:      limit ?? 25,
     offset:     offset ?? 0,
   }));

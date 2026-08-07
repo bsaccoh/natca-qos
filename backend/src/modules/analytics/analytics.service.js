@@ -261,6 +261,62 @@ export async function getHeatmap() {
   `);
 }
 
+export async function getSlaAlerts() {
+  const rows = await query(`
+    SELECT c.complaint_id, c.complaint_ref, c.issue_type, c.severity, c.status,
+           c.sla_deadline, c.created_at,
+           ROUND(EXTRACT(EPOCH FROM (NOW() - c.sla_deadline)) / 3600, 1) AS overdue_hours,
+           COALESCE(o.operator_name, 'Unknown') AS operator_name,
+           COALESCE(u.full_name, c.contact_name, 'Guest') AS reporter_name,
+           ao.full_name AS assigned_officer_name
+    FROM complaints c
+    LEFT JOIN operators o ON o.operator_id = c.operator_id
+    LEFT JOIN users u     ON u.user_id     = c.user_id
+    LEFT JOIN users ao    ON ao.user_id    = c.assigned_officer_id
+    WHERE c.sla_deadline < NOW()
+      AND c.status NOT IN ('RESOLVED', 'CLOSED')
+    ORDER BY c.sla_deadline ASC
+    LIMIT 200
+  `);
+  return rows.map(r => ({ ...r, overdue_hours: Number(r.overdue_hours) }));
+}
+
+export async function getOperatorCompliance() {
+  const rows = await query(`
+    SELECT o.operator_id, o.operator_name,
+           COUNT(c.complaint_id)::int AS total,
+           SUM(CASE WHEN c.status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END)::int AS resolved,
+           ROUND(
+             SUM(CASE WHEN c.status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) * 100.0
+             / NULLIF(COUNT(c.complaint_id), 0)::numeric, 1
+           ) AS resolution_rate,
+           ROUND((AVG(EXTRACT(EPOCH FROM (c.resolved_at - c.created_at)) / 3600)
+             FILTER (WHERE c.resolved_at IS NOT NULL))::numeric, 1) AS avg_resolution_hours,
+           SUM(CASE WHEN c.sla_deadline < NOW() AND c.status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END)::int AS sla_breach_count,
+           ROUND(
+             SUM(CASE WHEN c.sla_deadline < NOW() AND c.status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) * 100.0
+             / NULLIF(COUNT(c.complaint_id), 0)::numeric, 1
+           ) AS sla_breach_pct,
+           ROUND((AVG(c.citizen_rating) FILTER (WHERE c.citizen_rating IS NOT NULL))::numeric, 2) AS avg_csat
+    FROM operators o
+    LEFT JOIN complaints c ON c.operator_id = o.operator_id
+    WHERE o.status = 'ACTIVE'
+    GROUP BY o.operator_id, o.operator_name
+    ORDER BY o.operator_name
+  `);
+  return rows.map(r => ({
+    operator_id:         r.operator_id,
+    operator_name:       r.operator_name,
+    total:               Number(r.total),
+    resolved:            Number(r.resolved),
+    resolution_rate:     r.resolution_rate     ? Number(r.resolution_rate)     : 0,
+    avg_resolution_hours:r.avg_resolution_hours? Number(r.avg_resolution_hours): null,
+    sla_breach_count:    Number(r.sla_breach_count),
+    sla_breach_pct:      r.sla_breach_pct      ? Number(r.sla_breach_pct)      : 0,
+    avg_csat:            r.avg_csat            ? Number(r.avg_csat)            : null,
+  }));
+}
+
 export async function getOperatorBenchmark() {
   const rows = await query(`
     SELECT o.operator_name,
