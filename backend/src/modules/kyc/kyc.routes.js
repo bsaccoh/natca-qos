@@ -80,27 +80,30 @@ router.post(
       districtId:  z.coerce.number().int().optional(),
       chiefdomId:  z.coerce.number().int().optional(),
       idType:        z.string().optional(),
+      idExpiryDate:  z.string().optional(),
       faceMatchScore: z.coerce.number().min(0).max(100).optional(),
     }).parse(req.body);
 
-    const idFrontPath   = req.files?.id_front?.[0]?.path || null;
-    const idBackPath    = req.files?.id_back?.[0]?.path  || null;
-    const faceImagePath = req.files?.face?.[0]?.path     || null;
+    const rawIdFront   = req.files?.id_front?.[0]?.path || null;
+    const rawIdBack    = req.files?.id_back?.[0]?.path  || null;
+    const rawFace      = req.files?.face?.[0]?.path     || null;
 
-    if (faceImagePath) {
-      const qualityOk = await validateFaceQuality(faceImagePath);
+    if (rawFace) {
+      const qualityOk = await validateFaceQuality(rawFace);
       if (!qualityOk) {
-        fs.unlinkSync(faceImagePath);
+        fs.unlinkSync(rawFace);
         return res.status(400).json({ error: 'Face image quality too low (too dark or overexposed). Please retake the photo in better lighting.' });
       }
     }
 
+    const toRelative = (p) => p ? p.replace(/\\/g, '/').replace(/^.*?(uploads\/)/, 'uploads/') : null;
+
     ok(res, await svc.submitKyc({
       ...body,
       userId:       req.user?.userId || null,
-      idFrontPath,
-      idBackPath,
-      faceImagePath,
+      idFrontPath:   toRelative(rawIdFront),
+      idBackPath:    toRelative(rawIdBack),
+      faceImagePath: toRelative(rawFace),
     }));
   })
 );

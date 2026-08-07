@@ -52,7 +52,7 @@ const BACKEND_ORIGIN = API_BASE.replace(/\/api\/v\d+\/?$/, '');
 function fileUrl(p) {
   if (!p) return null;
   if (p.startsWith('http')) return p;
-  const clean = p.replace(/\\/g, '/').replace(/^\//, '');
+  const clean = p.replace(/\\/g, '/').replace(/^.*?(uploads\/)/, 'uploads/');
   return `${BACKEND_ORIGIN}/${clean}`;
 }
 
@@ -381,7 +381,7 @@ export default function Kyc() {
                   {[
                     { label: 'NIN',          val: selected.nin    ?? '—' },
                     { label: 'SIM ICCID',    val: selected.iccid  ?? '—' },
-                    { label: 'ID Expires',   val: selected.expires_at ? new Date(selected.expires_at).toLocaleDateString() : '—' },
+                    { label: 'ID Expires',   val: selected.id_expiry_date ? new Date(selected.id_expiry_date).toLocaleDateString() : '—' },
                     { label: 'Date of Birth',val: selected.date_of_birth ? new Date(selected.date_of_birth).toLocaleDateString() : '—' },
                     { label: 'Nationality',  val: selected.nationality ?? '—' },
                     { label: 'District',     val: selected.district ?? '—' },

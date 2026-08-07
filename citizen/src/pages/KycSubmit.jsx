@@ -112,6 +112,7 @@ function Step2({ form, set, setForm, districts, chiefdoms }) {
         error={!!form.nin && form.nin.length !== 8}
       />
       <TextField label="Date of Birth" type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} fullWidth InputLabelProps={{ shrink: true }} />
+      <TextField label="ID Expiry Date" type="date" value={form.idExpiryDate} onChange={set('idExpiryDate')} fullWidth InputLabelProps={{ shrink: true }} />
       <FormControl fullWidth>
         <InputLabel>Sex</InputLabel>
         <Select value={form.sex} label="Sex" onChange={set('sex')}>
@@ -291,6 +292,7 @@ function Step5({ form, files, operators }) {
     { l: 'Full Name', v: [form.firstName, form.lastName].filter(Boolean).join(' ') },
     { l: 'NIN',       v: form.nin },
     { l: 'DOB',       v: form.dateOfBirth },
+    { l: 'ID Expires',v: form.idExpiryDate },
     { l: 'ID Type',   v: form.idType?.replace(/_/g, ' ') },
   ];
   return (
@@ -359,7 +361,7 @@ export default function KycSubmit() {
 
   const [form, setFormState] = useState({
     phone: '', iccid: '', operatorId: '',
-    firstName: '', lastName: '', nin: '', dateOfBirth: '', sex: '',
+    firstName: '', lastName: '', nin: '', dateOfBirth: '', idExpiryDate: '', sex: '',
     nationality: 'Sierra Leonean', idType: '', address: '',
     districtId: '', chiefdomId: '',
   });
