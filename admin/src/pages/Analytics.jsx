@@ -79,6 +79,7 @@ export default function Analytics() {
   const [benchmark,  setBenchmark]  = useState(null);
   const [heatmap,    setHeatmap]    = useState([]);
   const [kyc,        setKyc]        = useState(null);
+  const [kpiData,    setKpiData]    = useState(null);
   const [loading,    setLoading]    = useState(true);
 
   const loadAll = useCallback(async () => {
@@ -90,14 +91,16 @@ export default function Analytics() {
       get('/analytics/operator-benchmark'),
       get('/analytics/heatmap'),
       get('/kyc/summary'),
+      get('/analytics/dashboard-kpis'),
     ]);
-    const [ovR, cmpR, advR, bmR, hmR, kycR] = results;
+    const [ovR, cmpR, advR, bmR, hmR, kycR, kpiR] = results;
     if (ovR.status  === 'fulfilled') setOverview(ovR.value.data);
     if (cmpR.status === 'fulfilled') setComplaints(cmpR.value.data);
     if (advR.status === 'fulfilled') setAdvanced(advR.value.data);
     if (bmR.status  === 'fulfilled') setBenchmark(bmR.value.data);
     if (hmR.status  === 'fulfilled') setHeatmap(hmR.value.data ?? []);
     if (kycR.status === 'fulfilled') setKyc(kycR.value.data);
+    if (kpiR.status === 'fulfilled') setKpiData(kpiR.value.data);
     setLoading(false);
   }, []);
 
@@ -338,17 +341,44 @@ export default function Analytics() {
             )}
           </ChartCard>
 
-          {/* KYC by operator from overview */}
-          <ChartCard title="KYC Submissions by Operator" height={340} loading={loading && !overview}>
-            {overview?.operators?.length > 0 ? (
+          {/* KYC by operator — real KYC submission counts */}
+          <ChartCard title="KYC Submissions by Operator" height={340} loading={loading && !kpiData}>
+            {(kpiData?.kycByOperator ?? []).length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={kpiData.kycByOperator} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis dataKey="operator" tick={{ fontSize: 11, fontWeight: 600 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <RechartsTooltip />
+                  <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 8 }} />
+                  <Bar dataKey="total"    name="Total Submitted" barSize={32} stackId="k" radius={[0,0,0,0]}>
+                    {(kpiData.kycByOperator).map((e, i) => <Cell key={i} fill={opColor(e.operator, i)} />)}
+                  </Bar>
+                  <Bar dataKey="approved" name="Approved" barSize={32} stackId="k" radius={[4,4,0,0]}>
+                    {(kpiData.kycByOperator).map((e, i) => <Cell key={i} fill={alpha(opColor(e.operator, i), 0.45)} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" height="80%">
+                <Typography color="text.secondary">No KYC operator data yet</Typography>
+              </Box>
+            )}
+          </ChartCard>
+        </Box>
+
+        {/* Complaints by Operator */}
+        <Box sx={{ mt: 3 }}>
+          <ChartCard title="Complaints by Operator" height={320} loading={loading && !overview}>
+            {overview?.operators?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={overview.operators.map(r => ({ ...r, complaints: Number(r.complaints) }))}
                   margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <RechartsTooltip />
-                  <Bar dataKey="complaints" name="Complaints" barSize={40} radius={[4,4,0,0]}>
+                  <Bar dataKey="complaints" name="Complaints" barSize={48} radius={[4,4,0,0]}>
                     {overview.operators.map((e, i) => <Cell key={i} fill={opColor(e.name, i)} />)}
                   </Bar>
                 </BarChart>
