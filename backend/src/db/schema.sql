@@ -364,8 +364,3 @@ ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_name  VARCHAR(150);
 ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(30);
 ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_email VARCHAR(200);
 ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS id_expiry_date DATE;
-
--- Normalize any absolute upload paths to relative (handles both / and \ separators)
-UPDATE kyc_submissions SET id_front_path   = 'uploads/' || SPLIT_PART(REPLACE(id_front_path,   '\', '/'), 'uploads/', 2) WHERE id_front_path   IS NOT NULL AND id_front_path   NOT LIKE 'uploads/%';
-UPDATE kyc_submissions SET id_back_path    = 'uploads/' || SPLIT_PART(REPLACE(id_back_path,    '\', '/'), 'uploads/', 2) WHERE id_back_path    IS NOT NULL AND id_back_path    NOT LIKE 'uploads/%';
-UPDATE kyc_submissions SET face_image_path = 'uploads/' || SPLIT_PART(REPLACE(face_image_path, '\', '/'), 'uploads/', 2) WHERE face_image_path IS NOT NULL AND face_image_path NOT LIKE 'uploads/%';
