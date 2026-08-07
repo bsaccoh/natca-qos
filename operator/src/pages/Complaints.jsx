@@ -3,11 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box, Paper, Typography, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, TextField, MenuItem, Stack, IconButton,
-  Tooltip, TablePagination, InputAdornment, Button,
+  Tooltip, TablePagination, InputAdornment, Button, Divider,
 } from '@mui/material';
 import SearchIcon    from '@mui/icons-material/Search';
 import RefreshIcon   from '@mui/icons-material/Refresh';
 import DownloadIcon  from '@mui/icons-material/Download';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import CloseIcon     from '@mui/icons-material/Close';
 import { get, api } from '../api/client.js';
 import { useAuth }   from '../auth/AuthContext.jsx';
 import { STATUS_COLOR, SEVERITY_COLOR } from '../theme/theme.js';
@@ -119,47 +121,99 @@ export default function Complaints() {
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
         <Typography variant="h5" fontWeight={700}>Complaints</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button size="small" variant="outlined" startIcon={<DownloadIcon />}
-            onClick={handleExport} disabled={exporting}>
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </Button>
-          <Tooltip title="Refresh">
-            <IconButton onClick={load}><RefreshIcon /></IconButton>
-          </Tooltip>
-        </Stack>
+        <Typography variant="body2" color="text.secondary">{total} total</Typography>
       </Stack>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={1.5}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} flexWrap="wrap">
-            <TextField size="small" placeholder="Search ref or description..."
+      <Paper sx={{ mb: 2, overflow: 'hidden' }}>
+        {/* Filter bar */}
+        <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ md: 'center' }} spacing={0}
+          divider={<Divider orientation="vertical" flexItem />}>
+
+          {/* Search */}
+          <Box sx={{ flex: '1 1 220px', px: 1.5, py: 1.25 }}>
+            <TextField fullWidth size="small" placeholder="Search ref or description…"
               value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-              sx={{ minWidth: 220 }} />
-            <TextField select size="small" label="Status" value={status}
-              onChange={(e) => { setStatus(e.target.value); setPage(0); }} sx={{ minWidth: 140 }}>
-              {STATUSES.map((s) => <MenuItem key={s} value={s}>{s || 'All'}</MenuItem>)}
+              slotProps={{ input: { disableUnderline: true, startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} /></InputAdornment> } }}
+              variant="standard"
+              sx={{ '& .MuiInput-root': { fontSize: 14 } }} />
+          </Box>
+
+          {/* Status */}
+          <Box sx={{ flex: '0 0 150px', px: 1.5, py: 1.25 }}>
+            <TextField select fullWidth size="small" variant="standard"
+              value={status} onChange={(e) => { setStatus(e.target.value); setPage(0); }}
+              slotProps={{ input: { disableUnderline: true } }}
+              sx={{ '& .MuiInput-root': { fontSize: 14 } }}
+              placeholder="Status">
+              {STATUSES.map((s) => <MenuItem key={s} value={s}>{s || 'All Statuses'}</MenuItem>)}
             </TextField>
-            <TextField select size="small" label="Severity" value={severity}
-              onChange={(e) => { setSeverity(e.target.value); setPage(0); }} sx={{ minWidth: 140 }}>
-              {SEVERITIES.map((s) => <MenuItem key={s} value={s}>{s || 'All'}</MenuItem>)}
+          </Box>
+
+          {/* Severity */}
+          <Box sx={{ flex: '0 0 150px', px: 1.5, py: 1.25 }}>
+            <TextField select fullWidth size="small" variant="standard"
+              value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(0); }}
+              slotProps={{ input: { disableUnderline: true } }}
+              sx={{ '& .MuiInput-root': { fontSize: 14 } }}>
+              {SEVERITIES.map((s) => <MenuItem key={s} value={s}>{s || 'All Severities'}</MenuItem>)}
             </TextField>
-          </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center">
-            <TextField size="small" label="Date From" type="date" value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
-              slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 160 }} />
-            <TextField size="small" label="Date To" type="date" value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
-              slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 160 }} />
+          </Box>
+
+          {/* Date From */}
+          <Box sx={{ flex: '0 0 155px', px: 1.5, py: 1.25 }}>
+            <TextField fullWidth size="small" type="date" variant="standard"
+              value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+              slotProps={{ input: { disableUnderline: true }, inputLabel: { shrink: true } }}
+              label="From"
+              sx={{ '& .MuiInput-root': { fontSize: 14 } }} />
+          </Box>
+
+          {/* Date To */}
+          <Box sx={{ flex: '0 0 155px', px: 1.5, py: 1.25 }}>
+            <TextField fullWidth size="small" type="date" variant="standard"
+              value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
+              slotProps={{ input: { disableUnderline: true }, inputLabel: { shrink: true } }}
+              label="To"
+              sx={{ '& .MuiInput-root': { fontSize: 14 } }} />
+          </Box>
+
+          {/* Actions */}
+          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ px: 1.5, py: 1, flexShrink: 0 }}>
             {hasFilters && (
-              <Button size="small" onClick={resetFilters} sx={{ whiteSpace: 'nowrap' }}>
-                Clear filters
-              </Button>
+              <Tooltip title="Clear filters">
+                <IconButton size="small" onClick={resetFilters} sx={{ color: 'text.secondary' }}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             )}
+            <Tooltip title="Refresh">
+              <IconButton size="small" onClick={load} sx={{ color: 'text.secondary' }}>
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+            <Button size="small" variant="contained" disableElevation
+              startIcon={<DownloadIcon fontSize="small" />}
+              onClick={handleExport} disabled={exporting}
+              sx={{ whiteSpace: 'nowrap', fontSize: 13 }}>
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </Button>
           </Stack>
         </Stack>
+
+        {hasFilters && (
+          <Box sx={{ px: 2, py: 0.75, bgcolor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
+            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
+              <FilterListIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+              <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>Active filters:</Typography>
+              {status   && <Chip size="small" label={status}   onDelete={() => setStatus('')}   sx={{ height: 20, fontSize: 11 }} />}
+              {severity && <Chip size="small" label={severity} onDelete={() => setSeverity('')} sx={{ height: 20, fontSize: 11 }} />}
+              {dateFrom && <Chip size="small" label={`From ${dateFrom}`} onDelete={() => setDateFrom('')} sx={{ height: 20, fontSize: 11 }} />}
+              {dateTo   && <Chip size="small" label={`To ${dateTo}`}     onDelete={() => setDateTo('')}   sx={{ height: 20, fontSize: 11 }} />}
+              {search   && <Chip size="small" label={`"${search}"`}      onDelete={() => setSearch('')}   sx={{ height: 20, fontSize: 11 }} />}
+            </Stack>
+          </Box>
+        )}
       </Paper>
 
       <TableContainer component={Paper}>
