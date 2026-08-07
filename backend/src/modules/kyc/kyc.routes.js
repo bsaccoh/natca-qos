@@ -56,6 +56,16 @@ const kycUpload = multer({
 const ADMIN  = ['SYSTEM_ADMIN', 'NATCA_ADMIN', 'NATCA_ANALYST'];
 const OP     = ['OPERATOR_ADMIN'];
 
+/* ── Warm up the Python face-match service (Render free tier cold starts) */
+router.get('/compare-faces', asyncHandler(async (_req, res) => {
+  try {
+    await fetch(`${env.faceMatchUrl}/health`);
+    ok(res, { status: 'warm' });
+  } catch {
+    res.status(503).json({ status: 'cold' });
+  }
+}));
+
 /* ── Public ─────────────────────────────────────────────────────────────── */
 router.post(
   '/submit',

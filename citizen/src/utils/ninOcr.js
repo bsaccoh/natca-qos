@@ -50,6 +50,59 @@ function fuzzyContains(text, nin, maxDist = 2) {
   return false;
 }
 
+function extractExpiryDate(text) {
+  const datePatterns = [
+    /(\d{1,2})[.\-/](\d{1,2})[.\-/](20\d{2})/g,
+    /(20\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})/g,
+  ];
+
+  const lines = text.split('\n');
+  const dates = [];
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    const isExpiryLine = /expir|exp\b|valid.*until|valid.*to|date.*exp/i.test(lower);
+
+    for (const pat of datePatterns) {
+      pat.lastIndex = 0;
+      let m;
+      while ((m = pat.exec(line)) !== null) {
+        let day, month, year;
+        if (/^20\d{2}$/.test(m[1])) {
+          year = parseInt(m[1]); month = parseInt(m[2]); day = parseInt(m[3]);
+        } else {
+          day = parseInt(m[1]); month = parseInt(m[2]); year = parseInt(m[3]);
+        }
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2024 && year <= 2040) {
+          const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          dates.push({ iso, isExpiryLine, year });
+        }
+      }
+    }
+  }
+
+  const expiryDates = dates.filter(d => d.isExpiryLine);
+  if (expiryDates.length > 0) return expiryDates[0].iso;
+
+  const futureDates = dates.filter(d => d.year > new Date().getFullYear());
+  if (futureDates.length > 0) return futureDates[0].iso;
+
+  return null;
+}
+
+export async function extractIdExpiry(idFrontFile) {
+  try {
+    const { data } = await Tesseract.recognize(idFrontFile, 'eng', {
+      logger: () => {},
+    });
+    const text = data?.text || '';
+    if (!text.trim()) return null;
+    return extractExpiryDate(text);
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyNinAgainstId({ idFrontFile, nin }) {
   const cleanNin = normaliseNin(nin);
   if (!cleanNin || cleanNin.length !== NIN_LENGTH) {

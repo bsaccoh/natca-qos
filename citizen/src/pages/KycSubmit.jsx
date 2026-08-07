@@ -16,7 +16,7 @@ import HelpOutlineIcon        from '@mui/icons-material/HelpOutline';
 import { get, api }           from '../api/client.js';
 import { useAuth }            from '../auth/AuthContext.jsx';
 import { verifyFaceAgainstId } from '../utils/faceMatch.js';
-import { verifyNinAgainstId }  from '../utils/ninOcr.js';
+import { verifyNinAgainstId, extractIdExpiry } from '../utils/ninOcr.js';
 import FaceScanner              from '../components/FaceScanner.jsx';
 import CameraAltIcon           from '@mui/icons-material/CameraAlt';
 
@@ -151,7 +151,13 @@ function Step2({ form, set, setForm, districts, chiefdoms }) {
   );
 }
 
-function Step3({ files, setFile }) {
+function Step3({ files, setFile, onIdFrontUploaded }) {
+  const handleIdFront = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFile('idFront', file);
+    onIdFrontUploaded?.(file);
+  };
   return (
     <Stack spacing={3}>
       <Typography variant="subtitle2" color="text.secondary">
@@ -159,7 +165,7 @@ function Step3({ files, setFile }) {
       </Typography>
       <Alert severity="info">Photos must be clear, well-lit, and all corners visible. Accepted formats: JPG, PNG, PDF.</Alert>
       <FileField label="ID Front" name="id_front" capture="environment" accept="image/*"
-        value={files.idFront} onChange={(e) => setFile('idFront', e.target.files[0])} required />
+        value={files.idFront} onChange={handleIdFront} required />
       <FileField label="ID Back"  name="id_back"  capture="environment" accept="image/*"
         value={files.idBack}  onChange={(e) => setFile('idBack',  e.target.files[0])} />
     </Stack>
@@ -373,7 +379,14 @@ export default function KycSubmit() {
   useEffect(() => {
     get('/operators').then((r) => setOperators(r.data || [])).catch(() => {});
     get('/districts').then((r) => setDistricts(r.data || [])).catch(() => {});
+    // Warm up the Python face match service (Render free tier cold starts ~30s)
+    api.get('/kyc/compare-faces').catch(() => {});
   }, []);
+
+  const handleIdFrontUploaded = async (file) => {
+    const expiry = await extractIdExpiry(file);
+    if (expiry) setFormState((f) => ({ ...f, idExpiryDate: expiry }));
+  };
 
   useEffect(() => {
     if (!form.districtId) { setChiefdoms([]); return; }
@@ -489,7 +502,7 @@ export default function KycSubmit() {
   const stepComponents = [
     <Step1 form={form} set={set} operators={operators} />,
     <Step2 form={form} set={set} setForm={setFormState} districts={districts} chiefdoms={chiefdoms} />,
-    <Step3 files={files} setFile={setFile} />,
+    <Step3 files={files} setFile={setFile} onIdFrontUploaded={handleIdFrontUploaded} />,
     <Step4 files={files} setFile={setFile} />,
     <Step5 form={form} files={files} operators={operators} />,
   ];
