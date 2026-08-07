@@ -8,27 +8,48 @@ import Tesseract from 'tesseract.js';
 
 const NIN_LENGTH = 8;
 
-// Normalise a user-entered NIN: uppercase, letters only.
 function normaliseNin(s) { return String(s).toUpperCase().replace(/[^A-Z]/g, ''); }
 
-// Extract all runs of 8+ consecutive letters from OCR text (uppercased).
-// OCR often misreads O→0 and I→1; we correct those common substitutions.
+// Common OCR misreads for letters
 function fixOcrSubstitutions(s) {
-  return s.toUpperCase().replace(/0/g, 'O').replace(/1/g, 'I');
+  return s.toUpperCase()
+    .replace(/0/g, 'O')
+    .replace(/1/g, 'I')
+    .replace(/8/g, 'B')
+    .replace(/5/g, 'S')
+    .replace(/6/g, 'G')
+    .replace(/2/g, 'Z');
 }
 
 function extractAlphaRuns(text) {
   const corrected = fixOcrSubstitutions(text);
-  return corrected.match(/[A-Z]{8,}/g) || [];
+  return corrected.match(/[A-Z]{4,}/g) || [];
 }
 
-/**
- * Search the OCR'd text for the submitted NIN.
- * Returns { ok, matched, message, extractedRuns }.
- * - ok: true  → NIN was found in the OCR text
- *       false → OCR text extracted but NIN NOT found
- *       null  → OCR failed / nothing readable; treat as unknown, don't block
- */
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function fuzzyContains(text, nin, maxDist = 2) {
+  const upper = text.toUpperCase();
+  for (let i = 0; i <= upper.length - nin.length; i++) {
+    const window = upper.slice(i, i + nin.length);
+    if (levenshtein(window, nin) <= maxDist) return true;
+  }
+  return false;
+}
+
 export async function verifyNinAgainstId({ idFrontFile, nin }) {
   const cleanNin = normaliseNin(nin);
   if (!cleanNin || cleanNin.length !== NIN_LENGTH) {
@@ -37,34 +58,54 @@ export async function verifyNinAgainstId({ idFrontFile, nin }) {
 
   let text = '';
   try {
-    const { data } = await Tesseract.recognize(idFrontFile, 'eng', { logger: () => {} });
+    const { data } = await Tesseract.recognize(idFrontFile, 'eng', {
+      logger: () => {},
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .-/',
+    });
     text = data?.text || '';
   } catch {
     return {
-      ok: null,
-      matched: false,
+      ok: null, matched: false,
       message: 'Could not read text from the ID image (poor image quality). Human review may be needed.',
       extractedRuns: [],
     };
   }
 
-  const runs = extractAlphaRuns(text);
-  if (!runs.length) {
+  if (!text.trim()) {
     return {
-      ok: null,
-      matched: false,
-      message: 'No letter sequences readable on the ID — skipping NIN check.',
+      ok: null, matched: false,
+      message: 'No text readable on the ID — skipping NIN check.',
       extractedRuns: [],
     };
   }
 
-  const matched = runs.some((run) => run.includes(cleanNin));
+  const correctedText = fixOcrSubstitutions(text);
+  const runs = extractAlphaRuns(text);
+
+  // Exact match in alpha runs
+  const exactMatch = runs.some((run) => run.includes(cleanNin));
+  if (exactMatch) {
+    return { ok: true, matched: true, message: `NIN found on ID (${cleanNin})`, extractedRuns: runs };
+  }
+
+  // Fuzzy match: allow up to 2 character differences (OCR misreads)
+  const fuzzyMatch = fuzzyContains(correctedText, cleanNin, 2);
+  if (fuzzyMatch) {
+    return { ok: true, matched: true, message: `NIN found on ID (${cleanNin}, fuzzy match)`, extractedRuns: runs };
+  }
+
+  // Also try against the raw text with substitution corrections
+  const rawFuzzy = fuzzyContains(text.toUpperCase(), cleanNin, 2);
+  if (rawFuzzy) {
+    return { ok: true, matched: true, message: `NIN found on ID (${cleanNin})`, extractedRuns: runs };
+  }
+
   return {
-    ok: matched,
-    matched,
-    message: matched
-      ? `NIN found on ID (${cleanNin})`
-      : `The NIN you entered (${cleanNin}) does not appear on the front of your ID. Please double-check and upload a clearer photo.`,
+    ok: null,
+    matched: false,
+    message: runs.length
+      ? `Could not confidently match NIN on ID (OCR quality may be low). Admin will verify manually.`
+      : `No letter sequences readable on the ID — skipping NIN check.`,
     extractedRuns: runs,
   };
 }

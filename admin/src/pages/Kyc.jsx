@@ -45,11 +45,15 @@ function statusCfg(s) {
   return STATUS_CFG[s?.toUpperCase()] ?? { label: s ?? 'Unknown', color: '#6b7280' };
 }
 
-/* Convert a filesystem path stored in DB to a proxied URL */
-function fileUrl(path) {
-  if (!path) return null;
-  if (path.startsWith('http')) return path;
-  return `/${path.replace(/^\//, '')}`;
+/* Convert a filesystem path stored in DB to a full URL via the backend */
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+const BACKEND_ORIGIN = API_BASE.replace(/\/api\/v\d+\/?$/, '');
+
+function fileUrl(p) {
+  if (!p) return null;
+  if (p.startsWith('http')) return p;
+  const clean = p.replace(/\\/g, '/').replace(/^\//, '');
+  return `${BACKEND_ORIGIN}/${clean}`;
 }
 
 /* ── image display ───────────────────────────────────────────────────── */
@@ -119,6 +123,19 @@ export default function Kyc() {
   }, [page, rowsPerPage, stFilter, opFilter, search]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  /* ── fetch full record when opening review ──────────────────────── */
+  async function openReview(row) {
+    setReviewTab(0);
+    setActionErr('');
+    setSelected(row);
+    try {
+      const res = await get(`/kyc/${row.kyc_id}`);
+      if (res?.data) setSelected(res.data);
+    } catch {
+      // Fall back to the list-level data
+    }
+  }
 
   /* ── action helpers ─────────────────────────────────────────────── */
   async function doAction(fn) {
@@ -306,7 +323,7 @@ export default function Kyc() {
                   </TableCell>
                   <TableCell align="right">
                     <Tooltip title="Review case">
-                      <Button size="small" variant="outlined" onClick={() => { setSelected(row); setReviewTab(0); setActionErr(''); }}
+                      <Button size="small" variant="outlined" onClick={() => openReview(row)}
                         sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
                         Review
                       </Button>
@@ -367,7 +384,7 @@ export default function Kyc() {
                     { label: 'ID Expires',   val: selected.expires_at ? new Date(selected.expires_at).toLocaleDateString() : '—' },
                     { label: 'Date of Birth',val: selected.date_of_birth ? new Date(selected.date_of_birth).toLocaleDateString() : '—' },
                     { label: 'Nationality',  val: selected.nationality ?? '—' },
-                    { label: 'District',     val: selected.district_name ?? '—' },
+                    { label: 'District',     val: selected.district ?? '—' },
                   ].map(f => (
                     <Paper key={f.label} sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>{f.label.toUpperCase()}</Typography>

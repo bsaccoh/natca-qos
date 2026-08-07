@@ -52,14 +52,17 @@ export async function submitKyc({
   return { kyc_id: row.kyc_id, kyc_reference: row.kyc_reference, status: row.status };
 }
 
-/* ─── Get KYC status by ref (public) ────────────────────────────────────── */
+/* ─── Get KYC status by ref or NIN (public) ────────────────────────────── */
 export async function getKycStatus(ref) {
   const row = await queryOne(
-    `SELECT kyc_reference, phone, status, created_at, updated_at, rejection_reason,
+    `SELECT k.kyc_reference, k.phone, k.status, k.nin,
+            k.first_name, k.last_name,
+            k.created_at, k.updated_at, k.rejection_reason,
             o.operator_name
      FROM kyc_submissions k
      LEFT JOIN operators o ON o.operator_id = k.operator_id
-     WHERE k.kyc_reference = :ref`,
+     WHERE k.kyc_reference = :ref OR k.nin = :ref
+     ORDER BY k.created_at DESC`,
     { ref }
   );
   if (!row) throw ApiError.notFound('KYC submission not found');
