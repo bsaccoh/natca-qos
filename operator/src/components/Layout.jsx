@@ -7,6 +7,7 @@ import {
 } from '@mui/material';
 import DashboardIcon     from '@mui/icons-material/Dashboard';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import VerifiedUserIcon  from '@mui/icons-material/VerifiedUser';
 import LogoutIcon        from '@mui/icons-material/Logout';
 import Brightness4Icon   from '@mui/icons-material/Brightness4';
 import Brightness7Icon   from '@mui/icons-material/Brightness7';
@@ -24,6 +25,7 @@ const MINI = 64;
 const NAV = [
   { to: '/',           label: 'Dashboard',  icon: <DashboardIcon /> },
   { to: '/complaints', label: 'Complaints', icon: <ReportProblemIcon /> },
+  { to: '/kyc',        label: 'KYC / SIM',  icon: <VerifiedUserIcon /> },
 ];
 
 function NotificationBell({ socket }) {

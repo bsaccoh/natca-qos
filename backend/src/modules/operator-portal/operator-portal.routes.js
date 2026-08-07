@@ -95,9 +95,13 @@ router.get('/analytics', asyncHandler(async (req, res) => {
   const [complaintCounts] = await query(
     `SELECT COUNT(*) AS total,
             SUM(CASE WHEN status = 'NEW'          THEN 1 ELSE 0 END) AS new_count,
+            SUM(CASE WHEN status = 'UNDER_REVIEW' THEN 1 ELSE 0 END) AS under_review,
+            SUM(CASE WHEN status = 'ASSIGNED'     THEN 1 ELSE 0 END) AS assigned,
+            SUM(CASE WHEN status = 'ESCALATED'    THEN 1 ELSE 0 END) AS escalated,
             SUM(CASE WHEN status = 'RESOLVED'     THEN 1 ELSE 0 END) AS resolved,
             SUM(CASE WHEN status = 'CLOSED'       THEN 1 ELSE 0 END) AS closed,
-            SUM(CASE WHEN sla_deadline < NOW() AND status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS sla_breached
+            SUM(CASE WHEN sla_deadline < NOW() AND status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS sla_breached,
+            ROUND(AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) FILTER (WHERE resolved_at IS NOT NULL), 1) AS avg_resolution_hours
      FROM complaints WHERE operator_id = :opId`,
     { opId: req.user.operatorId }
   );
@@ -109,7 +113,13 @@ router.get('/analytics', asyncHandler(async (req, res) => {
      GROUP BY day ORDER BY day`,
     { opId: req.user.operatorId }
   );
-  ok(res, { complaints: complaintCounts, kyc: kycCounts, trend });
+  const statusBreakdown = await query(
+    `SELECT status, COUNT(*) AS count
+     FROM complaints WHERE operator_id = :opId
+     GROUP BY status ORDER BY count DESC`,
+    { opId: req.user.operatorId }
+  );
+  ok(res, { complaints: complaintCounts, kyc: kycCounts, trend, statusBreakdown });
 }));
 
 export default router;

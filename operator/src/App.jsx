@@ -5,6 +5,7 @@ import Login              from './pages/Login.jsx';
 import Dashboard          from './pages/Dashboard.jsx';
 import Complaints         from './pages/Complaints.jsx';
 import ComplaintDetail     from './pages/ComplaintDetail.jsx';
+import Kyc                from './pages/Kyc.jsx';
 import { Box, CircularProgress } from '@mui/material';
 
 function Protected({ children }) {
@@ -23,6 +24,7 @@ export default function App() {
           <Route index                    element={<Dashboard />} />
           <Route path="complaints"        element={<Complaints />} />
           <Route path="complaints/:id"    element={<ComplaintDetail />} />
+          <Route path="kyc"               element={<Kyc />} />
           <Route path="*"                 element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
