@@ -18,6 +18,7 @@ export const env = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM || 'noreply@natca.gov.sl',
   },
+  faceMatchUrl: process.env.FACE_MATCH_URL || 'http://localhost:8001',
   seedAdmin: {
     email: process.env.SEED_ADMIN_EMAIL || 'admin@natca.gov.sl',
     password: process.env.SEED_ADMIN_PASSWORD || 'Admin@12345',

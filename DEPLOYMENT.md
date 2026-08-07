@@ -10,6 +10,7 @@ This guide walks you through deploying the **NatCA CMS** project for free using 
 | :--- | :--- | :--- |
 | **Database** | [Neon.tech](https://neon.tech) | `postgresql://user:pass@ep-xxx.neon.tech/neondb` |
 | **Backend API** | [Render.com](https://render.com) | `https://natca-cms-backend.onrender.com` |
+| **Face Match (Python)** | [Render.com](https://render.com) | `https://natca-face-match.onrender.com` |
 | **Citizen Portal** | [Vercel.com](https://vercel.com) | `https://natca-citizen.vercel.app` |
 | **Admin Portal** | [Vercel.com](https://vercel.com) | `https://natca-admin.vercel.app` |
 
@@ -23,7 +24,25 @@ This guide walks you through deploying the **NatCA CMS** project for free using 
 
 ---
 
-## Step 2: Deploy Backend to Render
+## Step 2a: Deploy Python Face Match Service to Render
+
+1. In Render, click **New +** → **Web Service**.
+2. Connect the same GitHub repository.
+3. Configure the Web Service:
+   - **Name**: `natca-face-match`
+   - **Root Directory**: `face_match`
+   - **Environment**: `Docker`
+   - **Instance Type**: `Free` (or Starter for faster cold starts)
+4. Add **Environment Variables**:
+   - `PORT` = `8001`
+   - `FACE_MATCH_THRESHOLD` = `55` (adjust if needed)
+5. Click **Create Web Service**.
+   - Once live, copy your face match URL (e.g., `https://natca-face-match.onrender.com`).
+   - *First request after deploy takes ~30s as models load.*
+
+---
+
+## Step 2b: Deploy Backend to Render
 
 1. Push your repository to **GitHub**.
 2. Sign up at **[render.com](https://render.com)**.
@@ -39,6 +58,7 @@ This guide walks you through deploying the **NatCA CMS** project for free using 
    - `DATABASE_URL` = *(Your Neon connection string from Step 1)*
    - `NODE_ENV` = `production`
    - `JWT_SECRET` = *(Generate any random 32+ character secret string)*
+   - `FACE_MATCH_URL` = *(Your face match service URL from Step 2a, e.g., `https://natca-face-match.onrender.com`)*
 7. Click **Create Web Service**.
    - Render will build and run your backend.
    - Once live, copy your backend URL (e.g., `https://natca-cms-backend.onrender.com`).

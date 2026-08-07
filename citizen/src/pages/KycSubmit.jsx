@@ -216,7 +216,6 @@ function Step4({ files, setFile }) {
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onCapture={(file) => setFile('face', file)}
-        idFrontFile={files.idFront}
       />
     </Stack>
   );
@@ -409,6 +408,7 @@ export default function KycSubmit() {
       if (files.idBack)  fd.append('id_back',  files.idBack);
       if (files.face)    fd.append('face',      files.face);
       if (user?.userId)  fd.append('userId',    user.userId);
+      if (typeof faceResult?.score === 'number') fd.append('faceMatchScore', faceResult.score);
 
       const r = await api.post('/kyc/submit', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },

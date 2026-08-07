@@ -10,6 +10,7 @@ import { ok }                  from '../../utils/http.js';
 import { authenticate, optionalAuth } from '../../middleware/auth.js';
 import { requireRole }         from '../../middleware/rbac.js';
 import * as svc                from './kyc.service.js';
+import { env }                 from '../../config/env.js';
 
 const SERVER_BRIGHTNESS_MIN = 30;
 const SERVER_BRIGHTNESS_MAX = 220;
@@ -78,7 +79,8 @@ router.post(
       address:     z.string().optional(),
       districtId:  z.coerce.number().int().optional(),
       chiefdomId:  z.coerce.number().int().optional(),
-      idType:      z.string().optional(),
+      idType:        z.string().optional(),
+      faceMatchScore: z.coerce.number().min(0).max(100).optional(),
     }).parse(req.body);
 
     const idFrontPath   = req.files?.id_front?.[0]?.path || null;
@@ -106,6 +108,67 @@ router.post(
 router.get('/status/:ref', asyncHandler(async (req, res) => {
   ok(res, await svc.getKycStatus(req.params.ref));
 }));
+
+/* ── Python face-match proxy ──────────────────────────────────────────────
+   Sends both images to the Python DeepFace/ArcFace microservice and
+   returns its similarity verdict to the browser.                         */
+const compareUpload = multer({ storage: multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(process.cwd(), 'uploads', 'tmp');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => cb(null, `${randomUUID()}${path.extname(file.originalname)}`),
+}), limits: { fileSize: 10 * 1024 * 1024 } });
+
+router.post(
+  '/compare-faces',
+  compareUpload.fields([
+    { name: 'id_front', maxCount: 1 },
+    { name: 'selfie',   maxCount: 1 },
+  ]),
+  asyncHandler(async (req, res) => {
+    const idPath     = req.files?.id_front?.[0]?.path;
+    const selfiePath = req.files?.selfie?.[0]?.path;
+    if (!idPath || !selfiePath) {
+      return res.status(400).json({ error: 'Both id_front and selfie files are required.' });
+    }
+
+    try {
+      const FormData = (await import('form-data')).default;
+      const form = new FormData();
+      form.append('id_image', fs.createReadStream(idPath));
+      form.append('selfie',   fs.createReadStream(selfiePath));
+
+      const url = `${env.faceMatchUrl}/compare`;
+      const resp = await fetch(url, { method: 'POST', body: form, headers: form.getHeaders() });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        return res.status(502).json({ error: `Face match service error: ${text}` });
+      }
+
+      const result = await resp.json();
+      ok(res, {
+        ok:      !!result.match,
+        score:   result.score ?? 0,
+        message: result.match
+          ? `Face verified (${result.score}% match)`
+          : result.message || `The face on your ID does not match your selfie (${result.score}% match). Please retake your selfie or upload a clearer ID photo.`,
+        strategy: result.strategy,
+        model:    result.model,
+      });
+    } catch (err) {
+      if (err.cause?.code === 'ECONNREFUSED' || err.code === 'ECONNREFUSED') {
+        return res.status(503).json({ error: 'Face match service is not available. Please try again later.' });
+      }
+      throw err;
+    } finally {
+      try { fs.unlinkSync(idPath); } catch {}
+      try { fs.unlinkSync(selfiePath); } catch {}
+    }
+  })
+);
 
 /* ── Authenticated (admin + operator) ───────────────────────────────────── */
 router.use(authenticate);

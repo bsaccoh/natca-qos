@@ -6,9 +6,7 @@ import {
 import CloseIcon        from '@mui/icons-material/Close';
 import CameraAltIcon    from '@mui/icons-material/CameraAlt';
 import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
-import CancelIcon       from '@mui/icons-material/Cancel';
 import * as faceapi from '@vladmandic/face-api';
-import { verifyFaceAgainstId } from '../utils/faceMatch.js';
 
 const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model';
 
@@ -69,7 +67,7 @@ function computeLaplacianVariance(imageData) {
   return sumSq / n - mean * mean;
 }
 
-export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
+export default function FaceScanner({ open, onClose, onCapture }) {
   const videoRef  = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -77,12 +75,11 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
   const stableSince = useRef(null);
 
   const [phase, setPhase]           = useState('starting');
-    // starting | ready | detecting | captured | comparing | pass | fail | error
+    // starting | ready | detecting | pass | error
   const [message, setMessage]       = useState('');
   const [modelReady, setModelReady] = useState(false);
   const [faceDetected, setFaceDetected] = useState(false);
   const [capturedFile, setCapturedFile] = useState(null);
-  const [matchResult, setMatchResult]   = useState(null);
   const [qualityMessage, setQualityMessage] = useState('');
 
   const cleanup = useCallback(() => {
@@ -103,7 +100,6 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
     setPhase('starting');
     setMessage('Loading face scanner…');
     setCapturedFile(null);
-    setMatchResult(null);
     setFaceDetected(false);
     loadDetectorModel()
       .then(() => { if (!cancelled) setModelReady(true); })
@@ -240,41 +236,22 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
       if (!blob) return;
       const file = new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' });
       setCapturedFile(file);
-      setPhase('captured');
-      // Stop the camera stream once captured
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
-      // Immediately compare against uploaded ID if provided
-      if (idFrontFile) {
-        setPhase('comparing');
-        setMessage('Comparing with ID… please wait');
-        try {
-          const result = await verifyFaceAgainstId({ idFrontFile, selfieFile: file });
-          setMatchResult(result);
-          setPhase(result.ok ? 'pass' : 'fail');
-          setMessage(result.message);
-        } catch (e) {
-          setPhase('fail');
-          setMessage(`Face comparison failed: ${e.message}`);
-        }
-      } else {
-        // No ID to compare — just finish
-        setPhase('pass');
-        setMessage('Face captured');
-      }
+      setPhase('pass');
+      setMessage('Face captured successfully');
     }, 'image/jpeg', 0.92);
   };
 
   const handleContinue = () => {
-    if (capturedFile) onCapture?.(capturedFile, matchResult);
+    if (capturedFile) onCapture?.(capturedFile);
     handleClose();
   };
 
   const handleRetake = () => {
     setCapturedFile(null);
-    setMatchResult(null);
     setFaceDetected(false);
     setQualityMessage('');
     setPhase('starting');
@@ -286,7 +263,7 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
 
   const SIZE = 260; // px diameter of the circular viewport
   const isScanning = phase === 'ready' || phase === 'detecting';
-  const isDone     = phase === 'pass' || phase === 'fail';
+  const isDone     = phase === 'pass';
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth
@@ -316,7 +293,6 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
             overflow: 'hidden',
             border: '4px solid',
             borderColor: phase === 'pass'      ? 'success.main'
-                       : phase === 'fail'      ? 'error.main'
                        : phase === 'detecting' ? 'warning.main'
                        : faceDetected           ? 'primary.main'
                        : 'divider',
@@ -365,20 +341,10 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
               }} />
             )}
 
-            {/* Overlay tick or cross once done */}
+            {/* Overlay tick once captured */}
             {phase === 'pass' && (
               <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(34, 197, 94, 0.35)' }}>
                 <CheckCircleIcon sx={{ fontSize: 90, color: '#fff' }} />
-              </Box>
-            )}
-            {phase === 'fail' && (
-              <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(239, 68, 68, 0.35)' }}>
-                <CancelIcon sx={{ fontSize: 90, color: '#fff' }} />
-              </Box>
-            )}
-            {phase === 'comparing' && (
-              <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0, 0, 0, 0.35)' }}>
-                <CircularProgress sx={{ color: '#fff' }} />
               </Box>
             )}
           </Box>
@@ -393,8 +359,6 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
             sx={{
               mt: 3, textAlign: 'center', minHeight: 24,
               color: phase === 'pass' ? 'success.main'
-                   : phase === 'fail' ? 'error.main'
-                   : phase === 'comparing' ? 'primary.main'
                    : phase === 'detecting' ? 'warning.main'
                    : 'text.primary',
             }}
@@ -407,11 +371,6 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
             {qualityMessage}
           </Typography>
         )}
-        {matchResult && typeof matchResult.score === 'number' && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-            Match score: {matchResult.score}%
-          </Typography>
-        )}
 
         <Stack direction="row" spacing={1} sx={{ mt: 3, width: '100%' }}>
           {isDone ? (
@@ -422,12 +381,12 @@ export default function FaceScanner({ open, onClose, onCapture, idFrontFile }) {
               <Button
                 size="small"
                 variant="contained"
-                color={phase === 'pass' ? 'success' : 'primary'}
+                color="success"
                 fullWidth
                 onClick={handleContinue}
                 sx={{ py: 1.2, whiteSpace: 'nowrap' }}
               >
-                {phase === 'pass' ? 'Continue' : 'Use anyway'}
+                Continue
               </Button>
             </>
           ) : (
