@@ -207,7 +207,7 @@ export default function Layout() {
               NatCA QoE
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', display: 'block', lineHeight: 1 }}>
-              {user?.fullName || user?.email}
+              {user?.role?.replace(/_/g, ' ')}
             </Typography>
           </Box>
         )}
