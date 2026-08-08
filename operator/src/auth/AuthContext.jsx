@@ -53,6 +53,11 @@ export function AuthProvider({ children }) {
     return u;
   };
 
+  const refreshUser = async () => {
+    const me = await api.get('/auth/me');
+    setUser(me.data.data);
+  };
+
   const logout = async () => {
     try { await post('/auth/logout', { refreshToken: tokenStore.refresh }); } catch {}
     tokenStore.clear();
@@ -60,5 +65,5 @@ export function AuthProvider({ children }) {
     if (socket) { socket.disconnect(); setSocket(null); }
   };
 
-  return <AuthCtx.Provider value={{ user, loading, login, logout, socket }}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{ user, loading, login, logout, refreshUser, socket }}>{children}</AuthCtx.Provider>;
 }

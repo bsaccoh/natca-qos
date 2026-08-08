@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
       const r = await api.get('/auth/me');
       setUser(r.data.data);
       
-      const s = io(); // Connects to the same host
+      const s = io(import.meta.env.VITE_SOCKET_URL || undefined);
       s.emit('join', r.data.data.userId);
       s.emit('join:admin');
       setSocket(s);
@@ -37,6 +37,11 @@ export function AuthProvider({ children }) {
     return me.data.data;
   };
 
+  const refreshUser = async () => {
+    const me = await api.get('/auth/me');
+    setUser(me.data.data);
+  };
+
   const logout = async () => {
     try { await post('/auth/logout', { refreshToken: tokenStore.refresh }); } catch {}
     tokenStore.clear();
@@ -44,5 +49,5 @@ export function AuthProvider({ children }) {
     if (socket) { socket.disconnect(); setSocket(null); }
   };
 
-  return <AuthCtx.Provider value={{ user, loading, login, logout, socket }}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{ user, loading, login, logout, refreshUser, socket }}>{children}</AuthCtx.Provider>;
 }

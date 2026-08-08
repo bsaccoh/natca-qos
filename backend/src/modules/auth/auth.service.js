@@ -92,7 +92,7 @@ export async function login(identifier, password, ctx = {}) {
   return {
     accessToken,
     refreshToken: `${sess.session_id}.${raw}`,
-    user: { userId: user.user_id, fullName: user.full_name, email: user.email, phone: user.phone, role: user.role_key, operatorId: user.operator_id },
+    user: { userId: user.user_id, fullName: user.full_name, email: user.email, phone: user.phone, role: user.role_key, operatorId: user.operator_id, mustChangePassword: Boolean(user.must_change_password) },
   };
 }
 
@@ -129,6 +129,7 @@ export async function getMe(userId) {
   const user = await queryOne(
     `SELECT u.user_id, u.full_name, u.email, u.phone, u.is_active,
             u.otp_verified, u.phone_verified, u.last_login_at, u.created_at,
+            u.must_change_password,
             r.role_key AS role, r.name AS role_name,
             o.operator_name, u.operator_id, u.district_id
      FROM users u
@@ -160,7 +161,7 @@ export async function changePassword(userId, { currentPassword, newPassword }) {
   const valid = await bcrypt.compare(currentPassword, user.password_hash);
   if (!valid) throw ApiError.badRequest('Current password is incorrect');
   const hash = await bcrypt.hash(newPassword, 12);
-  await query(`UPDATE users SET password_hash = :hash, updated_at = NOW() WHERE user_id = :id`, { hash, id: userId });
+  await query(`UPDATE users SET password_hash = :hash, must_change_password = FALSE, updated_at = NOW() WHERE user_id = :id`, { hash, id: userId });
   return { changed: true };
 }
 

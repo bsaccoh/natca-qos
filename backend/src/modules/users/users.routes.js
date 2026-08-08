@@ -32,8 +32,8 @@ router.post('/', asyncHandler(async (req, res) => {
   if (!role) throw ApiError.badRequest('Invalid role');
   const hash = await bcrypt.hash(password || 'Admin@12345', 12);
   const [row] = await query(
-    `INSERT INTO users (full_name, email, phone, password_hash, role_id, operator_id, otp_verified, phone_verified)
-     VALUES (:fullName, :email, :phone, :hash, :roleId, :operatorId, TRUE, TRUE)
+    `INSERT INTO users (full_name, email, phone, password_hash, role_id, operator_id, otp_verified, phone_verified, must_change_password)
+     VALUES (:fullName, :email, :phone, :hash, :roleId, :operatorId, TRUE, TRUE, TRUE)
      RETURNING user_id, full_name, email, phone`,
     { fullName, email: email || null, phone: phone || null, hash, roleId: role.role_id, operatorId: operatorId || null }
   );
@@ -67,7 +67,7 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
   const { newPassword } = req.body;
   if (!newPassword || newPassword.length < 8) throw ApiError.badRequest('Password must be at least 8 characters');
   const hash = await bcrypt.hash(newPassword, 12);
-  await query(`UPDATE users SET password_hash = :hash, updated_at = NOW() WHERE user_id = :id`, { hash, id: req.params.id });
+  await query(`UPDATE users SET password_hash = :hash, must_change_password = TRUE, updated_at = NOW() WHERE user_id = :id`, { hash, id: req.params.id });
   ok(res, { reset: true });
 }));
 

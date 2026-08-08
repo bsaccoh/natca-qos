@@ -347,6 +347,14 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
+-- ── System config ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS system_config (
+  key         VARCHAR(100) PRIMARY KEY,
+  value       JSONB        NOT NULL DEFAULT 'null'::jsonb,
+  description VARCHAR(255),
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
 -- ── Indexes ───────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_complaints_status   ON complaints(status);
 CREATE INDEX IF NOT EXISTS idx_complaints_operator ON complaints(operator_id);

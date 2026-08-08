@@ -74,8 +74,8 @@ export default function Login() {
     setLoading(true);
     setErr('');
     try {
-      await login(id, pw);
-      navigate('/');
+      const u = await login(id, pw);
+      navigate(u.must_change_password ? '/change-password' : '/');
     } catch (ex) {
       setErr(ex.response?.data?.error || 'Invalid credentials. Please try again.');
     } finally {

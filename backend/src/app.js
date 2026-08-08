@@ -8,17 +8,33 @@ import { notFoundHandler, errorHandler } from './middleware/error.js';
 import { optionalAuth } from './middleware/auth.js';
 import * as complaintSvc from './modules/complaints/complaints.service.js';
 import { broadcastToAdmins } from './modules/notifications/notifications.service.js';
+import { env } from './config/env.js';
+
+function buildCorsOrigin() {
+  const explicit = env.corsOrigins;
+  if (explicit.length > 0) return explicit;
+  if (env.nodeEnv === 'production') {
+    return [
+      'https://natca-admin.onrender.com',
+      'https://natca-operator.onrender.com',
+      'https://natca-citizen.onrender.com',
+    ];
+  }
+  return true;
+}
 
 export function createApp() {
   const app = express();
   const httpServer = createServer(app);
 
+  const corsOrigin = buildCorsOrigin();
+
   const io = new SocketIO(httpServer, {
-    cors: { origin: '*' },
+    cors: { origin: corsOrigin, credentials: true },
   });
 
   app.use(helmet({ crossOriginResourcePolicy: false }));
-  app.use(cors());
+  app.use(cors({ origin: corsOrigin, credentials: true }));
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.set('trust proxy', 1);

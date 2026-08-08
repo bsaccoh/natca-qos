@@ -172,12 +172,37 @@ router.patch('/users/:id/suspend', asyncHandler(async (req, res) => {
   ok(res, { suspended: Boolean(suspend) });
 }));
 
+/* ── Role permissions ────────────────────────────────────────────────── */
+router.get('/role-permissions', asyncHandler(async (_req, res) => {
+  const rows = await query(`SELECT role_key, permission_key, granted FROM role_permissions ORDER BY permission_key, role_key`);
+  ok(res, rows);
+}));
+
+router.put('/role-permissions', requireRole('SYSTEM_ADMIN'), asyncHandler(async (req, res) => {
+  const { permissions } = req.body;
+  if (!Array.isArray(permissions) || permissions.length === 0) throw ApiError.badRequest('permissions required');
+  for (const { role_key, permission_key, granted } of permissions) {
+    await query(
+      `INSERT INTO role_permissions (role_key, permission_key, granted)
+       VALUES (:role_key, :permission_key, :granted)
+       ON CONFLICT (role_key, permission_key) DO UPDATE SET granted = :granted`,
+      { role_key, permission_key, granted: Boolean(granted) }
+    );
+  }
+  await query(
+    `INSERT INTO audit_logs (user_id, action, entity_type, changes, ip_address)
+     VALUES (:uid, 'ROLE_PERMISSIONS_UPDATED', 'role_permissions', :ch, :ip)`,
+    { uid: req.user.userId, ch: JSON.stringify({ count: permissions.length }), ip: req.ip }
+  );
+  ok(res, { updated: true });
+}));
+
 /* ── Force password reset ────────────────────────────────────────────── */
 router.post('/users/:id/reset-password', requireRole('SYSTEM_ADMIN'), asyncHandler(async (req, res) => {
   const { newPassword } = req.body;
   if (!newPassword || newPassword.length < 8) throw ApiError.badRequest('Minimum 8 characters required');
   const hash = await bcrypt.hash(newPassword, 12);
-  await query(`UPDATE users SET password_hash = :hash, updated_at = NOW() WHERE user_id = :id`, { hash, id: req.params.id });
+  await query(`UPDATE users SET password_hash = :hash, must_change_password = TRUE, updated_at = NOW() WHERE user_id = :id`, { hash, id: req.params.id });
   await query(
     `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, ip_address)
      VALUES (:adminId, 'FORCE_PASSWORD_RESET', 'user', :targetId, :ip)`,

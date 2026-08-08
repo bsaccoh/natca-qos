@@ -24,6 +24,8 @@ import FolderLockIcon        from '@mui/icons-material/FolderShared';
 import BuildIcon             from '@mui/icons-material/Build';
 import PowerSettingsNewIcon  from '@mui/icons-material/PowerSettingsNew';
 import { get, del, put, patch } from '../api/client.js';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { useToast } from '../components/ToastContext.jsx';
 
 /* ── helpers ──────────────────────────────────────────────────────────── */
 function fmtDate(ts) {
@@ -59,30 +61,30 @@ const ROLE_COLOR = {
 
 /* ── permission matrix ─────────────────────────────────────────────────── */
 const ROLES_ORDER = ['SYSTEM_ADMIN', 'NATCA_ADMIN', 'NATCA_ANALYST', 'INSPECTOR', 'OPERATOR_ADMIN', 'CITIZEN'];
-const PERMISSIONS = [
-  { group: 'Complaints',   label: 'View all complaints',        roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST','INSPECTOR','OPERATOR_ADMIN'] },
-  { group: 'Complaints',   label: 'Manage / update complaints', roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST','INSPECTOR','OPERATOR_ADMIN'] },
-  { group: 'Complaints',   label: 'Assign & note complaints',   roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST'] },
-  { group: 'Complaints',   label: 'Export complaint reports',   roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST'] },
-  { group: 'KYC',          label: 'View KYC submissions',       roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST','OPERATOR_ADMIN'] },
-  { group: 'KYC',          label: 'Approve / reject KYC',       roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST'] },
-  { group: 'Analytics',    label: 'View analytics dashboard',   roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST','OPERATOR_ADMIN'] },
-  { group: 'Analytics',    label: 'Speed test analytics',       roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST','OPERATOR_ADMIN'] },
-  { group: 'Analytics',    label: 'Operator benchmark report',  roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Network',      label: 'View network incidents',     roles: ['SYSTEM_ADMIN','NATCA_ADMIN','NATCA_ANALYST','INSPECTOR'] },
-  { group: 'Network',      label: 'Create / manage incidents',  roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Content',      label: 'Manage news & FAQs',         roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Content',      label: 'Manage USSD codes',          roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Content',      label: 'Manage tariff rates',        roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Admin',        label: 'Manage operators',           roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Admin',        label: 'Manage staff users',         roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Security',     label: 'View audit logs',            roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Security',     label: 'Manage sessions',            roles: ['SYSTEM_ADMIN'] },
-  { group: 'Security',     label: 'System settings',            roles: ['SYSTEM_ADMIN'] },
-  { group: 'Security',     label: 'Force password reset',       roles: ['SYSTEM_ADMIN'] },
-  { group: 'Security',     label: 'Suspend accounts',           roles: ['SYSTEM_ADMIN','NATCA_ADMIN'] },
-  { group: 'Citizen',      label: 'Submit complaints',          roles: ['CITIZEN'] },
-  { group: 'Citizen',      label: 'Track own complaints',       roles: ['CITIZEN'] },
+const PERM_META = [
+  { key: 'complaints.view',       group: 'Complaints', label: 'View all complaints' },
+  { key: 'complaints.manage',     group: 'Complaints', label: 'Manage / update complaints' },
+  { key: 'complaints.assign',     group: 'Complaints', label: 'Assign & note complaints' },
+  { key: 'complaints.export',     group: 'Complaints', label: 'Export complaint reports' },
+  { key: 'kyc.view',              group: 'KYC',        label: 'View KYC submissions' },
+  { key: 'kyc.approve',           group: 'KYC',        label: 'Approve / reject KYC' },
+  { key: 'analytics.view',        group: 'Analytics',  label: 'View analytics dashboard' },
+  { key: 'analytics.speed',       group: 'Analytics',  label: 'Speed test analytics' },
+  { key: 'analytics.benchmark',   group: 'Analytics',  label: 'Operator benchmark report' },
+  { key: 'network.view',          group: 'Network',    label: 'View network incidents' },
+  { key: 'network.manage',        group: 'Network',    label: 'Create / manage incidents' },
+  { key: 'content.manage',        group: 'Content',    label: 'Manage news & FAQs' },
+  { key: 'content.ussd',          group: 'Content',    label: 'Manage USSD codes' },
+  { key: 'content.tariffs',       group: 'Content',    label: 'Manage tariff rates' },
+  { key: 'admin.operators',       group: 'Admin',      label: 'Manage operators' },
+  { key: 'admin.users',           group: 'Admin',      label: 'Manage staff users' },
+  { key: 'security.audit',        group: 'Security',   label: 'View audit logs' },
+  { key: 'security.sessions',     group: 'Security',   label: 'Manage sessions' },
+  { key: 'security.settings',     group: 'Security',   label: 'System settings' },
+  { key: 'security.reset_pw',     group: 'Security',   label: 'Force password reset' },
+  { key: 'security.suspend',      group: 'Security',   label: 'Suspend accounts' },
+  { key: 'citizen.submit',        group: 'Citizen',    label: 'Submit complaints' },
+  { key: 'citizen.track',         group: 'Citizen',    label: 'Track own complaints' },
 ];
 
 /* ── default settings fallback ─────────────────────────────────────────── */
@@ -405,13 +407,68 @@ function LoginHistoryTab() {
 ═══════════════════════════════════════════════════════════════════════ */
 function PermissionsTab() {
   const theme = useTheme();
-  const groups = [...new Set(PERMISSIONS.map(p => p.group))];
+  const { user } = useAuth();
+  const toast = useToast();
+  const isSystemAdmin = user?.role === 'SYSTEM_ADMIN';
+  const groups = [...new Set(PERM_META.map(p => p.group))];
+
+  const [matrix, setMatrix]     = useState({});
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [dirty, setDirty]       = useState({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const rows = (await get('/admin/role-permissions')).data || [];
+        const m = {};
+        rows.forEach(r => { m[`${r.permission_key}::${r.role_key}`] = r.granted; });
+        setMatrix(m);
+      } catch {
+        toast.error('Failed to load permissions');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const toggle = (permKey, role) => {
+    const k = `${permKey}::${role}`;
+    const next = !matrix[k];
+    setMatrix(prev => ({ ...prev, [k]: next }));
+    setDirty(prev => ({ ...prev, [k]: { role_key: role, permission_key: permKey, granted: next } }));
+  };
+
+  const save = async () => {
+    const changes = Object.values(dirty);
+    if (changes.length === 0) return;
+    setSaving(true);
+    try {
+      await put('/admin/role-permissions', { permissions: changes });
+      setDirty({});
+      toast.success(`${changes.length} permission${changes.length > 1 ? 's' : ''} updated`);
+    } catch {
+      toast.error('Failed to save permissions');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>;
 
   return (
     <Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Read-only reference of which roles have access to each system feature.
-      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="body2" color="text.secondary">
+          {isSystemAdmin ? 'Toggle switches to grant or revoke permissions for each role.' : 'View which roles have access to each system feature.'}
+        </Typography>
+        {isSystemAdmin && Object.keys(dirty).length > 0 && (
+          <Button size="small" variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={saving}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}>
+            {saving ? 'Saving…' : `Save ${Object.keys(dirty).length} change${Object.keys(dirty).length > 1 ? 's' : ''}`}
+          </Button>
+        )}
+      </Stack>
       <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'auto' }}>
         <Table size="small" sx={{ minWidth: 720 }}>
           <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
@@ -439,18 +496,28 @@ function PermissionsTab() {
                   </Typography>
                 </TableCell>
               </TableRow>,
-              ...PERMISSIONS.filter(p => p.group === group).map((p, i) => (
-                <TableRow key={`${group}-${i}`} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
+              ...PERM_META.filter(p => p.group === group).map(p => (
+                <TableRow key={p.key} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
                   <TableCell sx={{ pl: 3 }}>
                     <Typography variant="body2">{p.label}</Typography>
                   </TableCell>
-                  {ROLES_ORDER.map(role => (
-                    <TableCell key={role} align="center">
-                      {p.roles.includes(role)
-                        ? <CheckCircleIcon sx={{ fontSize: 18, color: ROLE_COLOR[role] }} />
-                        : <CancelIcon     sx={{ fontSize: 16, color: alpha('#94a3b8', 0.4) }} />}
-                    </TableCell>
-                  ))}
+                  {ROLES_ORDER.map(role => {
+                    const k = `${p.key}::${role}`;
+                    const granted = Boolean(matrix[k]);
+                    const changed = k in dirty;
+                    return (
+                      <TableCell key={role} align="center">
+                        {isSystemAdmin ? (
+                          <Switch size="small" checked={granted} onChange={() => toggle(p.key, role)}
+                            sx={changed ? { '& .MuiSwitch-track': { bgcolor: '#f59e0b' } } : {}} />
+                        ) : (
+                          granted
+                            ? <CheckCircleIcon sx={{ fontSize: 18, color: ROLE_COLOR[role] }} />
+                            : <CancelIcon sx={{ fontSize: 16, color: alpha('#94a3b8', 0.4) }} />
+                        )}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               )),
             ])}
