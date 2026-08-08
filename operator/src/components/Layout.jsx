@@ -144,17 +144,15 @@ export default function Layout() {
 
   const renderDrawer = (expanded) => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Toolbar sx={{ gap: 1, justifyContent: expanded ? 'flex-start' : 'center', minHeight: '64px !important', px: expanded ? 2 : 1 }}>
-        <Avatar sx={{ bgcolor: 'primary.main', width: 34, height: 34, fontSize: 14, borderRadius: 1 }}>
-          {(user?.full_name || user?.email || '?')[0].toUpperCase()}
-        </Avatar>
+      <Toolbar sx={{ gap: 1.5, justifyContent: expanded ? 'flex-start' : 'center', minHeight: '64px !important', px: expanded ? 2 : 1 }}>
+        <Box component="img" src="/natca_logo.png" alt="NatCA" sx={{ width: 38, height: 38, objectFit: 'contain' }} />
         {expanded && (
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <Typography variant="body2" fontWeight={700} noWrap sx={{ lineHeight: 1.2 }}>
-              {user?.full_name || user?.email}
+            <Typography variant="subtitle1" fontWeight={800} sx={{ lineHeight: 1.1, color: 'primary.main', fontSize: '0.92rem' }}>
+              {user?.operator_name || 'NatCA'}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', display: 'block', lineHeight: 1 }}>
-              {user?.operator_name || 'Operator'}
+              {user?.role?.replace(/_/g, ' ') || 'Operator Admin'}
             </Typography>
           </Box>
         )}
