@@ -199,17 +199,15 @@ export default function Layout() {
 
   const renderDrawer = (expanded) => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Toolbar sx={{ gap: 1, justifyContent: expanded ? 'flex-start' : 'center', minHeight: '64px !important', px: expanded ? 2 : 1 }}>
-        <Avatar sx={{ bgcolor: 'primary.main', width: 34, height: 34, fontSize: 14, borderRadius: 1 }}>
-          {(user?.fullName || user?.email || '?')[0].toUpperCase()}
-        </Avatar>
+      <Toolbar sx={{ gap: 1.5, justifyContent: expanded ? 'flex-start' : 'center', minHeight: '64px !important', px: expanded ? 2 : 1 }}>
+        <Box component="img" src="/natca_logo.png" alt="NatCA Logo" sx={{ width: 38, height: 38, objectFit: 'contain' }} />
         {expanded && (
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <Typography variant="body2" fontWeight={700} noWrap sx={{ lineHeight: 1.2 }}>
-              {user?.fullName || user?.email}
+            <Typography variant="subtitle1" fontWeight={800} sx={{ lineHeight: 1.1, color: 'primary.main', fontSize: '0.92rem' }}>
+              NatCA QoE
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', display: 'block', lineHeight: 1 }}>
-              {user?.role?.replace(/_/g, ' ')}
+              {user?.fullName || user?.email}
             </Typography>
           </Box>
         )}
