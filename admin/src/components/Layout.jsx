@@ -199,15 +199,17 @@ export default function Layout() {
 
   const renderDrawer = (expanded) => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Toolbar sx={{ gap: 1.5, justifyContent: expanded ? 'flex-start' : 'center', minHeight: '64px !important', px: expanded ? 2 : 1 }}>
-        <Box component="img" src="/natca_logo.png" alt="NatCA Logo" sx={{ width: 38, height: 38, objectFit: 'contain' }} />
+      <Toolbar sx={{ gap: 1, justifyContent: expanded ? 'flex-start' : 'center', minHeight: '64px !important', px: expanded ? 2 : 1 }}>
+        <Avatar sx={{ bgcolor: 'primary.main', width: 34, height: 34, fontSize: 14, borderRadius: 1 }}>
+          {(user?.fullName || user?.email || '?')[0].toUpperCase()}
+        </Avatar>
         {expanded && (
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <Typography variant="subtitle1" fontWeight={800} sx={{ lineHeight: 1.1, color: 'primary.main', fontSize: '0.92rem' }}>
-              NatCA QoE
+            <Typography variant="body2" fontWeight={700} noWrap sx={{ lineHeight: 1.2 }}>
+              {user?.fullName || user?.email}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', display: 'block', lineHeight: 1 }}>
-              Management System
+              {user?.role?.replace(/_/g, ' ')}
             </Typography>
           </Box>
         )}
@@ -258,21 +260,15 @@ export default function Layout() {
       </List>
 
       <Divider />
-      <Box sx={{ p: expanded ? 2 : 1, display: 'flex', alignItems: 'center', gap: 1.5, justifyContent: expanded ? 'flex-start' : 'center' }}>
-        <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36, borderRadius: 1, cursor: 'pointer' }}>
-          {(user?.fullName || user?.email || '?')[0].toUpperCase()}
-        </Avatar>
-        {expanded && (
-          <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <Typography variant="body2" noWrap>{user?.fullName || user?.email}</Typography>
-            <Chip size="small" label={user?.role?.replace(/_/g, ' ')} sx={{ height: 18, fontSize: 10, borderRadius: 1 }} />
-          </Box>
-        )}
+      <Box sx={{ p: expanded ? 2 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Tooltip title="Log out">
           <IconButton onClick={() => { logout(); navigate('/login'); }} size="small">
             <LogoutIcon fontSize="small" />
           </IconButton>
         </Tooltip>
+        {expanded && (
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>Sign out</Typography>
+        )}
       </Box>
     </Box>
   );
