@@ -359,4 +359,130 @@ class _ComplaintDetailsScreenState extends State<ComplaintDetailsScreen> with Si
       default: return "Open";
     }
   }
+
+  Widget _buildReviewSection() {
+    final hasExistingReview = widget.complaint.citizenRating != null;
+    if (hasExistingReview) {
+      return Container(
+        margin: const EdgeInsets.only(top: 24),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.dynamicCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.dynamicBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Your Review", style: AppTextStyles.body.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Row(
+              children: List.generate(5, (index) => Icon(
+                index < widget.complaint.citizenRating! ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: Colors.amber,
+                size: 24,
+              )),
+            ),
+            if (widget.complaint.citizenFeedback != null && widget.complaint.citizenFeedback!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(widget.complaint.citizenFeedback!, style: AppTextStyles.small.copyWith(color: AppColors.textLight)),
+            ]
+          ],
+        ),
+      );
+    }
+
+    if (widget.complaint.status != 'CLOSED' && widget.complaint.status != 'RESOLVED') {
+      return const SizedBox.shrink();
+    }
+
+    if (_reviewSubmitted) {
+      return Container(
+        margin: const EdgeInsets.only(top: 24),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.successGreen.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: AppColors.successGreen),
+            const SizedBox(width: 12),
+            Expanded(child: Text("Thank you for your feedback!", style: AppTextStyles.body.copyWith(color: AppColors.successGreen, fontWeight: FontWeight.bold))),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.dynamicCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.dynamicBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Rate your experience", style: AppTextStyles.body.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text("How would you rate the resolution of this issue?", style: AppTextStyles.small.copyWith(color: AppColors.textLight)),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (index) {
+              return IconButton(
+                icon: Icon(
+                  index < _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: Colors.amber,
+                  size: 36,
+                ),
+                onPressed: () => setState(() => _rating = index + 1),
+              );
+            }),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _feedbackController,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: "Additional feedback (optional)",
+              hintStyle: AppTextStyles.small.copyWith(color: AppColors.textLight),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+          if (_reviewError != null) ...[
+            const SizedBox(height: 8),
+            Text(_reviewError!, style: AppTextStyles.small.copyWith(color: AppColors.errorRed)),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSubmittingReview || _rating == 0 ? null : _submitReview,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: _isSubmittingReview 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text("Submit Review", style: AppTextStyles.body.copyWith(fontWeight: FontWeight.bold, color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
