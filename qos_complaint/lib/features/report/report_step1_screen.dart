@@ -104,10 +104,10 @@ class _ReportStep1ScreenState extends ConsumerState<ReportStep1Screen> {
   ];
 
   final List<Map<String, dynamic>> _operators = [
-    {"id": 3, "name": "Africell", "color": Color(0xFF7B1FA2), "logo": "A"},
-    {"id": 2, "name": "Orange", "color": Color(0xFFF5A623), "logo": "O"},
-    {"id": 1, "name": "Sierra Tel", "color": Color(0xFF1A3C8F), "logo": "S"},
-    {"id": 4, "name": "Qcell", "color": Color(0xFFE53935), "logo": "Q"},
+    {"id": 2, "name": "Africell", "color": Color(0xFF7B1FA2), "logo": "A"},
+    {"id": 1, "name": "Orange", "color": Color(0xFFF5A623), "logo": "O"},
+    {"id": 4, "name": "Sierra Tel", "color": Color(0xFF1A3C8F), "logo": "S"},
+    {"id": 3, "name": "Qcell", "color": Color(0xFFE53935), "logo": "Q"},
   ];
 
   @override

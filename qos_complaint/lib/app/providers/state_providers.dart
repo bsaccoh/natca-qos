@@ -78,7 +78,7 @@ class DraftReport {
 
   const DraftReport({
     this.issueType = "Call Drops",
-    this.operatorId = 3, // Africell by default
+    this.operatorId = 2, // Africell by default
     this.operatorName = "Africell",
     this.description = "",
     this.district = "Kenema District",
@@ -442,10 +442,10 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
 
   String _getOperatorName(int id) {
     switch (id) {
-      case 1: return "Sierra Tel";
-      case 2: return "Orange";
-      case 3: return "Africell";
-      case 4: return "Qcell";
+      case 1: return "Orange";
+      case 2: return "Africell";
+      case 3: return "Qcell";
+      case 4: return "Sierra Tel";
       default: return "Other";
     }
   }
@@ -455,7 +455,7 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
       ComplaintItem(
         id: 1,
         reference: "CN123456789",
-        operatorId: 3,
+        operatorId: 2,
         operatorName: "Africell",
         issueType: "Call Drops",
         description: "Calls keep dropping even when I have full signal.",
@@ -472,7 +472,7 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
       ComplaintItem(
         id: 2,
         reference: "CN123456790",
-        operatorId: 1,
+        operatorId: 4,
         operatorName: "Sierra Tel",
         issueType: "Slow Internet",
         description: "LTE speeds are extremely low in the afternoon.",
