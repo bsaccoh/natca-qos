@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Paper, Typography, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Chip, Stack, IconButton, Tooltip, Button,
-  LinearProgress, Alert,
+  TableHead, TableRow, Chip, Stack, IconButton, Button,
+  LinearProgress, Alert, alpha,
 } from '@mui/material';
 import RefreshIcon  from '@mui/icons-material/Refresh';
 import PrintIcon    from '@mui/icons-material/Print';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import { get } from '../api/client.js';
+import { analyticsService } from '../services/analyticsService.js';
+import PageHeader from '../components/PageHeader.jsx';
+import { formatHours } from '../utils/formatters.js';
 
 function pctColor(pct) {
   if (pct >= 80) return 'success';
@@ -21,29 +23,27 @@ function ScoreBar({ value, color }) {
       <Stack direction="row" justifyContent="space-between">
         <Typography variant="caption" fontWeight={700}>{value}%</Typography>
       </Stack>
-      <LinearProgress variant="determinate" value={Math.min(value, 100)}
-        color={color} sx={{ height: 6, borderRadius: 3 }} />
+      <LinearProgress
+        variant="determinate"
+        value={Math.min(value, 100)}
+        color={color}
+        sx={{ height: 6, borderRadius: 3 }}
+      />
     </Stack>
   );
 }
 
-function fmtHours(h) {
-  if (h == null) return '-';
-  if (h < 24) return `${h}h`;
-  return `${(h / 24).toFixed(1)}d`;
-}
-
 export default function ComplianceReport() {
-  const [rows, setRows]   = useState([]);
+  const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]     = useState('');
   const printRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const r = await get('/analytics/operator-compliance');
+      const r = await analyticsService.getOperatorCompliance();
       setRows(r.data || []);
     } catch {
       setError('Failed to load compliance data.');
@@ -57,24 +57,29 @@ export default function ComplianceReport() {
   const handlePrint = () => window.print();
 
   return (
-    <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <AssessmentIcon color="primary" />
-          <Typography variant="h5" fontWeight={700}>Operator Compliance Report</Typography>
-        </Stack>
-        <Stack direction="row" spacing={1}>
-          <Tooltip title="Refresh">
-            <IconButton onClick={load} disabled={loading}><RefreshIcon /></IconButton>
-          </Tooltip>
-          <Button variant="outlined" startIcon={<PrintIcon />} onClick={handlePrint}
-            sx={{ displayPrint: 'none' }}>
-            Print / PDF
-          </Button>
-        </Stack>
-      </Stack>
+    <Box sx={{ width: '100%', pb: 4 }}>
+      <PageHeader
+        icon={<AssessmentIcon />}
+        title="Telecom Operator Compliance Report"
+        subtitle="Regulatory SLA audit metrics, complaint resolution grading, and CSAT benchmarks"
+        actions={
+          <Stack direction="row" spacing={1.5}>
+            <IconButton onClick={load} disabled={loading} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+            <Button
+              variant="contained"
+              startIcon={<PrintIcon />}
+              onClick={handlePrint}
+              sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+            >
+              Print / Save PDF
+            </Button>
+          </Stack>
+        }
+      />
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 1.5 }}>{error}</Alert>}
 
       <Box ref={printRef}>
         {/* Print header (hidden on screen) */}
@@ -83,12 +88,12 @@ export default function ComplianceReport() {
           <Typography variant="body2" color="text.secondary">Generated: {new Date().toLocaleString()}</Typography>
         </Box>
 
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
           <Table size="small">
-            <TableHead>
+            <TableHead sx={{ bgcolor: (t) => alpha(t.palette.primary.main, 0.04) }}>
               <TableRow sx={{ '& th': { fontWeight: 700, whiteSpace: 'nowrap' } }}>
                 <TableCell>Operator</TableCell>
-                <TableCell align="right">Total</TableCell>
+                <TableCell align="right">Total Cases</TableCell>
                 <TableCell align="right">Resolved</TableCell>
                 <TableCell sx={{ minWidth: 140 }}>Resolution Rate</TableCell>
                 <TableCell align="right">Avg Resolution</TableCell>
@@ -102,7 +107,7 @@ export default function ComplianceReport() {
               {rows.length === 0 && !loading && (
                 <TableRow>
                   <TableCell colSpan={9} sx={{ textAlign: 'center', py: 6 }}>
-                    <Typography color="text.secondary">No data available</Typography>
+                    <Typography color="text.secondary">No compliance metrics available</Typography>
                   </TableCell>
                 </TableRow>
               )}
@@ -116,14 +121,14 @@ export default function ComplianceReport() {
                 return (
                   <TableRow key={r.operator_id} hover>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={600}>{r.operator_name}</Typography>
+                      <Typography variant="body2" fontWeight={700}>{r.operator_name}</Typography>
                     </TableCell>
                     <TableCell align="right">{r.total}</TableCell>
                     <TableCell align="right">{r.resolved}</TableCell>
                     <TableCell>
                       <ScoreBar value={r.resolution_rate} color={pctColor(r.resolution_rate)} />
                     </TableCell>
-                    <TableCell align="right">{fmtHours(r.avg_resolution_hours)}</TableCell>
+                    <TableCell align="right">{formatHours(r.avg_resolution_hours)}</TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" color={r.sla_breach_count > 0 ? 'error.main' : 'text.primary'} fontWeight={r.sla_breach_count > 0 ? 700 : 400}>
                         {r.sla_breach_count}
@@ -134,12 +139,16 @@ export default function ComplianceReport() {
                     </TableCell>
                     <TableCell align="right">
                       {r.avg_csat != null ? (
-                        <Chip size="small" label={`★ ${r.avg_csat}`}
-                          color={r.avg_csat >= 4 ? 'success' : r.avg_csat >= 3 ? 'warning' : 'error'} />
-                      ) : '-'}
+                        <Chip
+                          size="small"
+                          label={`★ ${r.avg_csat}`}
+                          color={r.avg_csat >= 4 ? 'success' : r.avg_csat >= 3 ? 'warning' : 'error'}
+                          sx={{ fontWeight: 700 }}
+                        />
+                      ) : '—'}
                     </TableCell>
                     <TableCell>
-                      <Chip size="small" label={grade} color={gradeColor} sx={{ fontWeight: 700, minWidth: 32 }} />
+                      <Chip size="small" label={grade} color={gradeColor} sx={{ fontWeight: 800, minWidth: 32, borderRadius: 1 }} />
                     </TableCell>
                   </TableRow>
                 );
@@ -149,14 +158,14 @@ export default function ComplianceReport() {
         </TableContainer>
 
         {/* Grading key */}
-        <Paper sx={{ p: 2, mt: 2 }}>
+        <Paper sx={{ p: 2.5, mt: 2.5, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
           <Typography variant="caption" color="text.secondary" fontWeight={600}>
-            Grading: &nbsp;
-            A = ≥90% resolution & ≤5% SLA breach &nbsp;|&nbsp;
-            B = ≥75% resolution & ≤15% SLA breach &nbsp;|&nbsp;
-            C = ≥60% resolution &nbsp;|&nbsp;
-            D = ≥40% &nbsp;|&nbsp;
-            F = below 40%
+            Regulatory Performance Grading Scale: &nbsp;
+            <strong>A</strong> = ≥90% resolution & ≤5% SLA breach &nbsp;|&nbsp;
+            <strong>B</strong> = ≥75% resolution & ≤15% SLA breach &nbsp;|&nbsp;
+            <strong>C</strong> = ≥60% resolution &nbsp;|&nbsp;
+            <strong>D</strong> = ≥40% resolution &nbsp;|&nbsp;
+            <strong>F</strong> = below 40% resolution
           </Typography>
         </Paper>
       </Box>

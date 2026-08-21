@@ -1,8 +1,13 @@
 import 'dotenv/config';
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+if (nodeEnv === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is required in production.');
+}
+
 export const env = {
   port: Number(process.env.PORT) || 5000,
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   db: {
     url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/natca_cms',
   },

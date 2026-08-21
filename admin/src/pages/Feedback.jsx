@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Stack, Alert, TextField, MenuItem, Select,
   FormControl, InputLabel, Table, TableHead, TableBody, TableRow, TableCell,
-  TableContainer, Chip, Divider, Tooltip,
+  TableContainer, Chip, Tooltip, alpha,
 } from '@mui/material';
 import StarIcon        from '@mui/icons-material/Star';
 import StarBorderIcon  from '@mui/icons-material/StarBorder';
@@ -12,6 +12,9 @@ import AnalyticsIcon   from '@mui/icons-material/Analytics';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { get }         from '../api/client.js';
 import { Loading }     from '../components/ui.jsx';
+import PageHeader      from '../components/PageHeader.jsx';
+import { formatDate }  from '../utils/formatters.js';
+import { getOperatorColor } from '../theme/theme.js';
 
 const STAR_COLORS = { 5: '#10b981', 4: '#84cc16', 3: '#f59e0b', 2: '#f97316', 1: '#ef4444' };
 
@@ -23,7 +26,7 @@ function StarDisplay({ value }) {
           ? <StarIcon key={s} sx={{ fontSize: 16, color: '#f59e0b' }} />
           : <StarBorderIcon key={s} sx={{ fontSize: 16, color: 'action.disabled' }} />
       ))}
-      <Typography variant="caption" fontWeight={600} ml={0.5} color="text.secondary">
+      <Typography variant="caption" fontWeight={700} ml={0.5} color="text.secondary">
         {value ? Number(value).toFixed(1) : '—'}
       </Typography>
     </Stack>
@@ -32,9 +35,9 @@ function StarDisplay({ value }) {
 
 function SummaryCard({ label, value, icon, color, sub }) {
   return (
-    <Paper sx={{ p: 2.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+    <Paper sx={{ p: 2.5, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
           {label}
         </Typography>
         <Box sx={{ color, display: 'flex' }}>{icon}</Box>
@@ -65,7 +68,6 @@ export default function Feedback() {
     finally { setLoading(false); }
   }, []);
 
-  // Load operators list once for the filter
   useEffect(() => {
     get('/operators?limit=100').then((r) => {
       setOperators(r.data?.rows || []);
@@ -91,12 +93,10 @@ export default function Feedback() {
     );
   });
 
-  // Build rating distribution for the chart from rows
   const distMap = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   rows.forEach((r) => { if (r.citizen_rating >= 1 && r.citizen_rating <= 5) distMap[r.citizen_rating]++; });
   const distData = [1, 2, 3, 4, 5].map((star) => ({ star: `${'★'.repeat(star)}`, count: distMap[star], rating: star }));
 
-  // Avg rating per operator
   const opMap = {};
   rows.forEach((r) => {
     if (!opMap[r.operator_name]) opMap[r.operator_name] = { operator: r.operator_name, sum: 0, count: 0 };
@@ -106,28 +106,22 @@ export default function Feedback() {
   const opData = Object.values(opMap).map((o) => ({ operator: o.operator, avg: Number((o.sum / o.count).toFixed(2)), count: o.count }));
 
   return (
-    <Box sx={{ pb: 4 }}>
+    <Box sx={{ width: '100%', pb: 4 }}>
+      <PageHeader
+        icon={<AnalyticsIcon />}
+        title="Customer Satisfaction & Ratings"
+        subtitle="Citizen feedback scores and sentiment on resolved telecom complaints"
+      />
 
-      {/* ── Header ── */}
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
-        <Box sx={{ width: 40, height: 40, borderRadius: 1.5, bgcolor: 'rgba(245,158,11,0.12)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <AnalyticsIcon />
-        </Box>
-        <Box>
-          <Typography variant="h5" fontWeight={700} sx={{ letterSpacing: '-0.02em' }}>Customer Feedback & Ratings</Typography>
-          <Typography variant="body2" color="text.secondary">Citizen satisfaction scores and comments on resolved complaints</Typography>
-        </Box>
-      </Stack>
-
-      {err && <Alert severity="error" sx={{ mb: 2, borderRadius: 1.5 }}>{err}</Alert>}
+      {err && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 2 }}>{err}</Alert>}
       {loading && <Loading height={240} />}
 
       {!loading && data && (
         <>
-          {/* ── Summary Cards ── */}
+          {/* Summary Cards */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(4,1fr)' }, gap: 2, mb: 3 }}>
             <SummaryCard
-              label="Avg Rating"
+              label="Avg CSAT Rating"
               value={summary.avgRating ? `${Number(summary.avgRating).toFixed(1)} / 5` : 'No data'}
               icon={<StarIcon />}
               color="#f59e0b"
@@ -144,21 +138,20 @@ export default function Feedback() {
               value={summary.positive || 0}
               icon={<ThumbUpIcon />}
               color="#10b981"
-              sub={summary.totalRated > 0 ? `${((summary.positive / summary.totalRated) * 100).toFixed(0)}% of rated` : undefined}
+              sub={summary.totalRated > 0 ? `${((summary.positive / summary.totalRated) * 100).toFixed(0)}% satisfaction` : undefined}
             />
             <SummaryCard
               label="Negative (1-2 ★)"
               value={summary.negative || 0}
               icon={<ThumbDownIcon />}
               color="#ef4444"
-              sub={summary.totalRated > 0 ? `${((summary.negative / summary.totalRated) * 100).toFixed(0)}% of rated` : undefined}
+              sub={summary.totalRated > 0 ? `${((summary.negative / summary.totalRated) * 100).toFixed(0)}% dissatisfaction` : undefined}
             />
           </Box>
 
-          {/* ── Charts ── */}
+          {/* Charts */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2,1fr)' }, gap: 3, mb: 3 }}>
-
-            <Paper sx={{ p: 3, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+            <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
               <Typography variant="subtitle1" fontWeight={700} mb={2}>Rating Distribution</Typography>
               <Box sx={{ height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -175,8 +168,8 @@ export default function Feedback() {
               </Box>
             </Paper>
 
-            <Paper sx={{ p: 3, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-              <Typography variant="subtitle1" fontWeight={700} mb={2}>Avg Rating by Operator</Typography>
+            <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="subtitle1" fontWeight={700} mb={2}>Avg CSAT Rating by Operator</Typography>
               <Box sx={{ height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={opData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
@@ -193,17 +186,18 @@ export default function Feedback() {
                 </ResponsiveContainer>
               </Box>
             </Paper>
-
           </Box>
 
-          {/* ── Feedback Table ── */}
-          <Paper sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-            <Box sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'center', borderBottom: 1, borderColor: 'divider', flexWrap: 'wrap' }}>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ flex: 1, minWidth: 120 }}>Recent Feedback</Typography>
+          {/* Feedback Table */}
+          <Paper sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+            <Box sx={{ p: 2.5, display: 'flex', gap: 2, alignItems: 'center', borderBottom: 1, borderColor: 'divider', flexWrap: 'wrap' }}>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ flex: 1, minWidth: 140 }}>Citizen Feedback Records</Typography>
               <TextField
-                size="small" placeholder="Search complaints…" value={search}
+                size="small"
+                placeholder="Search reference or feedback…"
+                value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                sx={{ minWidth: 200 }}
+                sx={{ minWidth: 220 }}
               />
               <FormControl size="small" sx={{ minWidth: 160 }}>
                 <InputLabel>Operator</InputLabel>
@@ -217,60 +211,73 @@ export default function Feedback() {
             </Box>
 
             {filtered.length === 0 ? (
-              <Box sx={{ p: 4, textAlign: 'center' }}>
+              <Box sx={{ p: 5, textAlign: 'center' }}>
                 <Typography color="text.secondary">No feedback records found</Typography>
               </Box>
             ) : (
               <TableContainer sx={{ maxHeight: 520 }}>
                 <Table size="small" stickyHeader>
-                  <TableHead>
+                  <TableHead sx={{ bgcolor: (t) => alpha(t.palette.primary.main, 0.04) }}>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700 }}>Reference</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Operator</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Rating</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Comment</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Citizen Comment</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Recorded Date</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filtered.map((r, i) => (
-                      <TableRow key={i} hover>
-                        <TableCell>
-                          <Typography variant="caption" fontFamily="monospace" fontWeight={600}>
-                            {r.complaint_ref}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={r.operator_name} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption">{r.category}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <StarDisplay value={r.citizen_rating} />
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 280 }}>
-                          {r.citizen_feedback ? (
-                            <Tooltip title={r.citizen_feedback} placement="top">
-                              <Typography variant="caption" color="text.secondary" sx={{
-                                display: '-webkit-box', WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                              }}>
-                                {r.citizen_feedback}
-                              </Typography>
-                            </Tooltip>
-                          ) : (
-                            <Typography variant="caption" color="text.disabled">No comment</Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary">
-                            {new Date(r.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filtered.map((r, i) => {
+                      const opColor = getOperatorColor(r.operator_name, '#2563eb');
+                      return (
+                        <TableRow key={i} hover>
+                          <TableCell>
+                            <Typography variant="caption" fontFamily="monospace" fontWeight={700} color="primary.main">
+                              {r.complaint_ref}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={r.operator_name}
+                              size="small"
+                              sx={{
+                                fontWeight: 700,
+                                fontSize: 11,
+                                borderRadius: 1,
+                                bgcolor: alpha(opColor, 0.12),
+                                color: opColor,
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption">{r.category}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <StarDisplay value={r.citizen_rating} />
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: 320 }}>
+                            {r.citizen_feedback ? (
+                              <Tooltip title={r.citizen_feedback} placement="top">
+                                <Typography variant="caption" color="text.secondary" sx={{
+                                  display: '-webkit-box', WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                                }}>
+                                  {r.citizen_feedback}
+                                </Typography>
+                              </Tooltip>
+                            ) : (
+                              <Typography variant="caption" color="text.disabled">No comment provided</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatDate(r.updated_at)}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>

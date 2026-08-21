@@ -3,23 +3,12 @@ import TrendingUpIcon   from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import TrendingFlatIcon from '@mui/icons-material/TrendingFlat';
 
-export function useChartTip() {
-  const theme = useTheme();
-  return {
-    background: theme.palette.background.paper,
-    border: `1px solid ${theme.palette.divider}`,
-    borderRadius: 6,
-    color: theme.palette.text.primary,
-    boxShadow: theme.palette.mode === 'dark' ? 'none' : '0 2px 8px rgba(0,0,0,0.08)',
-  };
-}
-
 export function KpiCard({ label, value, unit, sub, color = 'primary.main', icon, trend }) {
   const theme = useTheme();
   return (
     <Card sx={{ 
       height: '100%', 
-      borderRadius: 1.5, 
+      borderRadius: 2, 
       border: `1px solid ${theme.palette.divider}`,
       position: 'relative',
     }}>
@@ -44,7 +33,8 @@ export function KpiCard({ label, value, unit, sub, color = 'primary.main', icon,
 }
 
 export function StatusChip({ status, label }) {
-  const displayLabel = label || status?.replace(/_/g, ' ');
+  let displayLabel = label || status?.replace(/_/g, ' ');
+  if (status === 'NEW') displayLabel = 'ESCALATED';
   let color = '#2563eb';
   
   if (['PASS', 'RESOLVED', 'CLOSED'].includes(status)) color = '#10b981';
@@ -73,7 +63,7 @@ export function Loading({ height = 200 }) {
 
 export function EmptyState({ message = 'No data available.', hint }) {
   return (
-    <Alert severity="info" sx={{ my: 2, borderRadius: 1.5 }}>
+    <Alert severity="info" sx={{ my: 2, borderRadius: 2 }}>
       {message}
       {hint && <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>{hint}</Typography>}
     </Alert>
@@ -85,5 +75,3 @@ export function Trend({ trend }) {
   if (trend === 'DOWN' || trend === 'FAIL') return <TrendingDownIcon sx={{ color: '#ef4444', fontSize: 18 }} />;
   return <TrendingFlatIcon sx={{ color: 'text.secondary', fontSize: 18 }} />;
 }
-
-export const fmt = (v, d = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(d));

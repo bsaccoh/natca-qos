@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, Paper, CircularProgress, Stack, IconButton,
-  Chip, useTheme, alpha,
+  Box, Typography, Paper, CircularProgress, IconButton,
+  useTheme, alpha,
 } from '@mui/material';
 import {
-  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  BarChart, Bar, Cell, Legend, PieChart, Pie,
+  BarChart, Bar, Cell, Legend, PieChart, Pie, AreaChart, Area,
 } from 'recharts';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import RefreshIcon      from '@mui/icons-material/Refresh';
@@ -18,19 +18,12 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import StarIcon         from '@mui/icons-material/Star';
 import TrendingUpIcon   from '@mui/icons-material/TrendingUp';
 import FingerprintIcon  from '@mui/icons-material/Fingerprint';
+import InsightsIcon     from '@mui/icons-material/Insights';
 import { get } from '../api/client.js';
+import PageHeader from '../components/PageHeader.jsx';
+import { getOperatorColor } from '../theme/theme.js';
 
-const OPERATOR_COLORS = {
-  'Orange SL':  '#ff7900',
-  'Africell':   '#8e24aa',
-  'Qcell':      '#5b2d8e',
-  'SierraTel':  '#00a3e0',
-  'Sierra Tel': '#00a3e0',
-  'Unknown':    '#6b7280',
-};
-const FALLBACK_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#6366f1'];
-
-const opColor = (name, i) => OPERATOR_COLORS[name] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length];
+const FALLBACK_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
 
 const renderLabel = ({ cx, cy, midAngle, outerRadius, value, name, fill }) => {
   if (!value) return null;
@@ -46,7 +39,7 @@ const renderLabel = ({ cx, cy, midAngle, outerRadius, value, name, fill }) => {
 
 function KpiCard({ label, value, color, icon, sub, loading }) {
   return (
-    <Paper sx={{ p: 2.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+    <Paper sx={{ p: 2.5, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Typography variant="caption" fontWeight={700} color="text.secondary">{label}</Typography>
         <Box sx={{ color }}>{icon}</Box>
@@ -62,17 +55,17 @@ function KpiCard({ label, value, color, icon, sub, loading }) {
 
 function ChartCard({ title, height = 350, children, loading }) {
   return (
-    <Paper sx={{ p: 3, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', height }}>
+    <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider', height }}>
       <Typography variant="subtitle2" fontWeight={700} mb={2}>{title}</Typography>
-      {loading
-        ? <Box display="flex" justifyContent="center" alignItems="center" height="80%"><CircularProgress /></Box>
-        : children}
+      {loading ? (
+        <Box display="flex" justifyContent="center" alignItems="center" height="80%"><CircularProgress /></Box>
+      ) : children}
     </Paper>
   );
 }
 
 export default function Analytics() {
-  const theme   = useTheme();
+  const theme = useTheme();
   const [overview,   setOverview]   = useState(null);
   const [complaints, setComplaints] = useState(null);
   const [advanced,   setAdvanced]   = useState(null);
@@ -106,52 +99,43 @@ export default function Analytics() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  /* ── derived values ────────────────────────────────────────────────── */
-  const total       = overview?.complaints?.total ?? 0;
-  const resolved    = Number(overview?.complaints?.resolved ?? 0);
-  const resRate     = total > 0 ? `${Math.round((resolved / total) * 100)}%` : '—';
-  const mttaHours   = advanced?.mttaHours;
-  const csatScore   = advanced?.csatScore;
+  const total     = overview?.complaints?.total ?? 0;
+  const resolved  = Number(overview?.complaints?.resolved ?? 0);
+  const resRate   = total > 0 ? `${Math.round((resolved / total) * 100)}%` : '—';
+  const mttaHours = advanced?.mttaHours;
+  const csatScore = advanced?.csatScore;
 
-  /* KYC donut data */
   const kycDonut = kyc ? [
     { name: 'Approved',     value: Number(kyc.approved     ?? 0), fill: '#10b981' },
     { name: 'Pending',      value: Number(kyc.pending      ?? 0), fill: '#f59e0b' },
     { name: 'Under Review', value: Number(kyc.under_review ?? 0), fill: '#3b82f6' },
     { name: 'Rejected',     value: Number(kyc.rejected     ?? 0), fill: '#ef4444' },
-  ].filter(d => d.value > 0) : [];
+  ].filter((d) => d.value > 0) : [];
 
-  /* Weekly complaint trend from overview */
-  const trendData = (overview?.trend ?? []).map(r => ({
+  const trendData = (overview?.trend ?? []).map((r) => ({
     date:  new Date(r.day).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
     Total: Number(r.count),
   }));
 
-  /* By-status data */
   const statusData = (complaints?.byStatus ?? []).map((r, i) => ({
     status: r.status, count: Number(r.count), fill: FALLBACK_COLORS[i % FALLBACK_COLORS.length],
   }));
 
-  /* Weekly per-operator from advanced */
   const weeklyData  = advanced?.weeklyData ?? [];
   const opNames     = advanced?.operatorNames ?? [];
 
   return (
     <Box sx={{ width: '100%', minHeight: '100%', pb: 4 }}>
-      {/* Header */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box>
-          <Typography variant="h5" fontWeight={700} color="text.primary">
-            Consumer Complaint &amp; KYC Analytics
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Resolution performance, SLA compliance, operator benchmarking &amp; KYC status
-          </Typography>
-        </Box>
-        <IconButton onClick={loadAll} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
-          <RefreshIcon />
-        </IconButton>
-      </Stack>
+      <PageHeader
+        icon={<InsightsIcon />}
+        title="Telecom Complaint & KYC Analytics"
+        subtitle="Resolution performance, SLA compliance matrices, operator benchmarking & KYC status"
+        actions={
+          <IconButton onClick={loadAll} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+        }
+      />
 
       {/* KPI Row */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(3,1fr)' }, gap: 2, mb: 3 }}>
@@ -170,7 +154,7 @@ export default function Analytics() {
 
       {/* Map + Status donut */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3, mb: 3 }}>
-        <Paper sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', height: 400, overflow: 'hidden', position: 'relative' }}>
+        <Paper sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', height: 400, overflow: 'hidden', position: 'relative' }}>
           <Box sx={{ p: 2, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, bgcolor: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(4px)' }}>
             <Typography variant="subtitle2" fontWeight={700}>GIS Complaint Hotspots</Typography>
             <Typography variant="caption" color="text.secondary">{heatmap.length} georeferenced complaints</Typography>
@@ -180,11 +164,17 @@ export default function Analytics() {
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               attribution="&copy; OpenStreetMap contributors &copy; CARTO"
             />
-            {heatmap.map(c => (
-              <CircleMarker key={c.complaint_id} center={[Number(c.latitude), Number(c.longitude)]}
+            {heatmap.map((c) => (
+              <CircleMarker
+                key={c.complaint_id}
+                center={[Number(c.latitude), Number(c.longitude)]}
                 radius={6}
                 fillColor={c.priority === 'CRITICAL' ? '#ef4444' : c.priority === 'HIGH' ? '#f59e0b' : '#3b82f6'}
-                color="#fff" weight={1} opacity={1} fillOpacity={0.75}>
+                color="#fff"
+                weight={1}
+                opacity={1}
+                fillOpacity={0.75}
+              >
                 <Popup>
                   <strong>{c.complaint_ref}</strong><br />
                   {c.operator_name} — {c.issue_type}
@@ -252,7 +242,7 @@ export default function Analytics() {
         <ChartCard title="By Category (Top 7)" height={350} loading={loading && !complaints}>
           {complaints?.byCategory?.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
-              <RadarChart data={complaints.byCategory.slice(0, 7).map(r => ({ category: r.name, count: Number(r.count) }))}>
+              <RadarChart data={complaints.byCategory.slice(0, 7).map((r) => ({ category: r.name, count: Number(r.count) }))}>
                 <PolarGrid stroke={alpha(theme.palette.divider, 0.4)} />
                 <PolarAngleAxis dataKey="category" tick={{ fontSize: 9, fontWeight: 600 }} />
                 <PolarRadiusAxis tick={false} />
@@ -280,10 +270,10 @@ export default function Analytics() {
                 <RechartsTooltip formatter={(v, n) => [n === 'avgResolutionHrs' ? `${v}h` : `${v}%`, n === 'avgResolutionHrs' ? 'Avg resolution' : 'Resolution rate']} />
                 <Legend />
                 <Bar dataKey="avgResolutionHrs" name="Avg resolution (h)" barSize={12} radius={[0,3,3,0]}>
-                  {benchmark.map((e, i) => <Cell key={i} fill={opColor(e.operator, i)} />)}
+                  {benchmark.map((e, i) => <Cell key={i} fill={getOperatorColor(e.operator, FALLBACK_COLORS[i % FALLBACK_COLORS.length])} />)}
                 </Bar>
                 <Bar dataKey="resolutionPct" name="Resolution %" barSize={12} radius={[0,3,3,0]}>
-                  {benchmark.map((e, i) => <Cell key={i} fill={alpha(opColor(e.operator, i), 0.45)} />)}
+                  {benchmark.map((e, i) => <Cell key={i} fill={alpha(getOperatorColor(e.operator, FALLBACK_COLORS[i % FALLBACK_COLORS.length]), 0.45)} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -304,7 +294,7 @@ export default function Analytics() {
                 <RechartsTooltip />
                 <Legend verticalAlign="bottom" />
                 {opNames.map((op, i) => (
-                  <Bar key={op} dataKey={op} stackId="a" fill={opColor(op, i)} />
+                  <Bar key={op} dataKey={op} stackId="a" fill={getOperatorColor(op, FALLBACK_COLORS[i % FALLBACK_COLORS.length])} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
@@ -341,7 +331,7 @@ export default function Analytics() {
             )}
           </ChartCard>
 
-          {/* KYC by operator — real KYC submission counts */}
+          {/* KYC by operator */}
           <ChartCard title="KYC Submissions by Operator" height={340} loading={loading && !kpiData}>
             {(kpiData?.kycByOperator ?? []).length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
@@ -351,41 +341,17 @@ export default function Analytics() {
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <RechartsTooltip />
                   <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 8 }} />
-                  <Bar dataKey="total"    name="Total Submitted" barSize={32} stackId="k" radius={[0,0,0,0]}>
-                    {(kpiData.kycByOperator).map((e, i) => <Cell key={i} fill={opColor(e.operator, i)} />)}
+                  <Bar dataKey="total" name="Total Submitted" barSize={32} stackId="k" radius={[0,0,0,0]}>
+                    {(kpiData.kycByOperator).map((e, i) => <Cell key={i} fill={getOperatorColor(e.operator, FALLBACK_COLORS[i % FALLBACK_COLORS.length])} />)}
                   </Bar>
                   <Bar dataKey="approved" name="Approved" barSize={32} stackId="k" radius={[4,4,0,0]}>
-                    {(kpiData.kycByOperator).map((e, i) => <Cell key={i} fill={alpha(opColor(e.operator, i), 0.45)} />)}
+                    {(kpiData.kycByOperator).map((e, i) => <Cell key={i} fill={alpha(getOperatorColor(e.operator, FALLBACK_COLORS[i % FALLBACK_COLORS.length]), 0.45)} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <Box display="flex" justifyContent="center" alignItems="center" height="80%">
                 <Typography color="text.secondary">No KYC operator data yet</Typography>
-              </Box>
-            )}
-          </ChartCard>
-        </Box>
-
-        {/* Complaints by Operator */}
-        <Box sx={{ mt: 3 }}>
-          <ChartCard title="Complaints by Operator" height={320} loading={loading && !overview}>
-            {overview?.operators?.length > 0 ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={overview.operators.map(r => ({ ...r, complaints: Number(r.complaints) }))}
-                  margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <RechartsTooltip />
-                  <Bar dataKey="complaints" name="Complaints" barSize={48} radius={[4,4,0,0]}>
-                    {overview.operators.map((e, i) => <Cell key={i} fill={opColor(e.name, i)} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <Box display="flex" justifyContent="center" alignItems="center" height="80%">
-                <Typography color="text.secondary">No operator data</Typography>
               </Box>
             )}
           </ChartCard>

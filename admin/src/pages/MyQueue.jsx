@@ -2,25 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Paper, Typography, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Chip, Stack, IconButton, Tooltip, TablePagination,
-  TextField, MenuItem, InputAdornment,
+  TableHead, TableRow, Chip, Stack, IconButton, TablePagination,
+  TextField, MenuItem, InputAdornment, alpha,
 } from '@mui/material';
 import SearchIcon   from '@mui/icons-material/Search';
 import RefreshIcon  from '@mui/icons-material/Refresh';
 import InboxIcon    from '@mui/icons-material/Inbox';
 import { get }      from '../api/client.js';
 import { useAuth }  from '../auth/AuthContext.jsx';
-
-const STATUS_COLOR = {
-  NEW:          '#3b82f6',
-  UNDER_REVIEW: '#f59e0b',
-  ASSIGNED:     '#8b5cf6',
-  ESCALATED:    '#ef4444',
-  RESOLVED:     '#10b981',
-  CLOSED:       '#64748b',
-};
-
-const SEVERITY_COLOR = { LOW: 'default', MEDIUM: 'warning', HIGH: 'error', CRITICAL: 'error' };
+import PageHeader   from '../components/PageHeader.jsx';
+import { formatDate } from '../utils/formatters.js';
+import { getOperatorColor, STATUS_COLORS, SEVERITY_COLORS } from '../theme/theme.js';
 
 const STATUSES = ['', 'NEW', 'UNDER_REVIEW', 'ASSIGNED', 'ESCALATED', 'RESOLVED', 'CLOSED'];
 
@@ -46,11 +38,11 @@ export default function MyQueue() {
       });
       if (status) q.set('status', status);
       if (search) q.set('search', search);
-      const r = await get(`/complaints?${q}`);
+      const r = await get(`/complaints?${q.toString()}`);
       setRows(r.data?.rows || []);
       setTotal(r.data?.total || 0);
-    } catch (err) {
-      console.error('My Queue load failed', err);
+    } catch {
+      // ignore
     } finally {
       setLoading(false);
     }
@@ -59,42 +51,56 @@ export default function MyQueue() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <InboxIcon color="primary" />
-          <Typography variant="h5" fontWeight={700}>My Queue</Typography>
-          <Chip label={`${total} complaints`} size="small" />
-        </Stack>
-        <Tooltip title="Refresh">
-          <IconButton onClick={load} disabled={loading}><RefreshIcon /></IconButton>
-        </Tooltip>
-      </Stack>
+    <Box sx={{ width: '100%', pb: 4 }}>
+      <PageHeader
+        icon={<InboxIcon />}
+        title="My Assigned Complaint Queue"
+        subtitle={`Active cases assigned to your regulatory officer profile (${total} total)`}
+        actions={
+          <IconButton onClick={load} disabled={loading} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+        }
+      />
 
-      <Paper sx={{ p: 1.5, mb: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-          <TextField size="small" placeholder="Search ref or description…" value={search}
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <TextField
+            size="small"
+            placeholder="Search ref or description…"
+            value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-            sx={{ minWidth: 240 }} />
-          <TextField select size="small" label="Status" value={status}
-            onChange={(e) => { setStatus(e.target.value); setPage(0); }} sx={{ minWidth: 160 }}>
-            {STATUSES.map((s) => <MenuItem key={s} value={s}>{s || 'All Statuses'}</MenuItem>)}
+            slotProps={{
+              input: {
+                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+              },
+            }}
+            sx={{ flex: 1, minWidth: 260 }}
+          />
+          <TextField
+            select
+            size="small"
+            label="Status"
+            value={status}
+            onChange={(e) => { setStatus(e.target.value); setPage(0); }}
+            sx={{ minWidth: 180 }}
+          >
+            {STATUSES.map((s) => <MenuItem key={s} value={s}>{s ? s.replace(/_/g, ' ') : 'All Statuses'}</MenuItem>)}
           </TextField>
         </Stack>
       </Paper>
 
-      <TableContainer component={Paper}>
+      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
         <Table size="small">
-          <TableHead>
+          <TableHead sx={{ bgcolor: (t) => alpha(t.palette.primary.main, 0.04) }}>
             <TableRow>
-              <TableCell sx={{ fontWeight: 700 }}>Ref</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Case Ref</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Issue Type</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Operator</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Severity</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>SLA Deadline</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Created</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Submitted</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -102,8 +108,8 @@ export default function MyQueue() {
               <TableRow>
                 <TableCell colSpan={7} sx={{ textAlign: 'center', py: 6 }}>
                   <Stack alignItems="center" spacing={1}>
-                    <InboxIcon sx={{ fontSize: 40, color: 'text.disabled' }} />
-                    <Typography color="text.secondary">No complaints assigned to you</Typography>
+                    <InboxIcon sx={{ fontSize: 44, color: 'text.disabled' }} />
+                    <Typography color="text.secondary">No complaints currently assigned to you</Typography>
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -111,38 +117,91 @@ export default function MyQueue() {
             {rows.map((r) => {
               const slaBreached = r.sla_deadline && new Date(r.sla_deadline) < new Date()
                 && !['RESOLVED', 'CLOSED'].includes(r.status);
+              const opColor = getOperatorColor(r.operator_name, '#2563eb');
+              const stColor = STATUS_COLORS[r.status] || '#64748b';
+              const sevColor = SEVERITY_COLORS[r.severity] || '#64748b';
+
               return (
-                <TableRow key={r.complaint_id} hover sx={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/complaints?search=${r.complaint_ref}`)}>
+                <TableRow
+                  key={r.complaint_id}
+                  hover
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/complaints?search=${r.complaint_ref}`)}
+                >
                   <TableCell>
-                    <Typography variant="body2" fontWeight={700} color="primary.main">{r.complaint_ref}</Typography>
-                  </TableCell>
-                  <TableCell>{r.issue_type}</TableCell>
-                  <TableCell>{r.operator_name || '-'}</TableCell>
-                  <TableCell>
-                    <Chip size="small" label={r.severity} color={SEVERITY_COLOR[r.severity] || 'default'} />
-                  </TableCell>
-                  <TableCell>
-                    <Chip size="small" label={r.status}
-                      sx={{ bgcolor: STATUS_COLOR[r.status] || '#64748b', color: '#fff' }} />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2"
-                      color={slaBreached ? 'error.main' : 'text.primary'}
-                      fontWeight={slaBreached ? 700 : 400}>
-                      {r.sla_deadline ? new Date(r.sla_deadline).toLocaleString() : '-'}
+                    <Typography variant="body2" fontWeight={800} color="primary.main" sx={{ fontFamily: 'monospace' }}>
+                      {r.complaint_ref}
                     </Typography>
                   </TableCell>
-                  <TableCell>{new Date(r.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={600}>{r.issue_type?.replace(/_/g, ' ')}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={r.operator_name || '—'}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: 11,
+                        borderRadius: 1,
+                        bgcolor: alpha(opColor, 0.12),
+                        color: opColor,
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={r.severity}
+                      sx={{
+                        fontWeight: 800,
+                        fontSize: 10,
+                        borderRadius: 1,
+                        bgcolor: alpha(sevColor, 0.12),
+                        color: sevColor,
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={r.status?.replace(/_/g, ' ')}
+                      sx={{
+                        fontWeight: 700,
+                        borderRadius: 1,
+                        bgcolor: alpha(stColor, 0.14),
+                        color: stColor,
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Typography
+                      variant="caption"
+                      color={slaBreached ? 'error.main' : 'text.primary'}
+                      fontWeight={slaBreached ? 800 : 500}
+                    >
+                      {formatDate(r.sla_deadline)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDate(r.created_at)}
+                    </Typography>
+                  </TableCell>
                 </TableRow>
               );
             })}
           </TableBody>
         </Table>
-        <TablePagination component="div" count={total} page={page} rowsPerPage={perPage}
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          rowsPerPage={perPage}
           onPageChange={(_e, p) => setPage(p)}
-          onRowsPerPageChange={(e) => { setPerPage(+e.target.value); setPage(0); }}
-          rowsPerPageOptions={[10, 25, 50]} />
+          onRowsPerPageChange={(e) => { setPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+          rowsPerPageOptions={[10, 25, 50]}
+        />
       </TableContainer>
     </Box>
   );

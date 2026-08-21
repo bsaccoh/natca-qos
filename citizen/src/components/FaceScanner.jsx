@@ -189,7 +189,7 @@ export default function FaceScanner({ open, onClose, onCapture }) {
               setQualityMessage('Image blurry — hold still and steady');
               return;
             }
-          } catch (_) {
+          } catch {
             // Canvas pixel read failed (e.g. CORS taint) — skip quality check and proceed
           }
 
@@ -271,7 +271,7 @@ export default function FaceScanner({ open, onClose, onCapture }) {
       <Box sx={{ display: 'flex', alignItems: 'center', px: 2, pt: 2 }}>
         <Typography variant="subtitle1" fontWeight={700}>Face Scan</Typography>
         <Box sx={{ flex: 1 }} />
-        <IconButton onClick={handleClose}><CloseIcon /></IconButton>
+        <IconButton onClick={handleClose} aria-label="Close scanner"><CloseIcon /></IconButton>
       </Box>
 
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2 }}>

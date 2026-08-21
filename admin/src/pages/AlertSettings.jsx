@@ -1,39 +1,42 @@
 import { useState, useEffect } from 'react';
 import {
   Box, Paper, Typography, Stack, Button, TextField, Switch, FormControlLabel,
-  Alert, Chip, IconButton, Divider, CircularProgress, Tooltip,
+  Alert, Chip, Divider, CircularProgress, Tooltip,
 } from '@mui/material';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import AddIcon    from '@mui/icons-material/Add';
 import CloseIcon  from '@mui/icons-material/Close';
 import SaveIcon   from '@mui/icons-material/Save';
-import { get, put } from '../api/client.js';
+import { adminService } from '../services/adminService.js';
+import PageHeader from '../components/PageHeader.jsx';
+import { useToast } from '../components/ToastContext.jsx';
+import { getErrorMessage } from '../api/client.js';
 
 export default function AlertSettings() {
+  const { showToast } = useToast();
   const [settings, setSettings] = useState(null);
   const [loading, setLoading]   = useState(false);
   const [saving, setSaving]     = useState(false);
-  const [success, setSuccess]   = useState('');
   const [error, setError]       = useState('');
   const [emailInput, setEmailInput] = useState('');
 
   useEffect(() => {
     setLoading(true);
-    get('/admin/alert-settings')
+    adminService.getAlertSettings()
       .then((r) => setSettings(r.data))
-      .catch(() => setError('Failed to load alert settings.'))
+      .catch((err) => setError(getErrorMessage(err, 'Failed to load alert settings.')))
       .finally(() => setLoading(false));
   }, []);
 
   const save = async () => {
     setSaving(true);
-    setSuccess('');
     setError('');
     try {
-      await put('/admin/alert-settings', settings);
-      setSuccess('Settings saved successfully.');
-    } catch {
-      setError('Failed to save settings.');
+      await adminService.updateAlertSettings(settings);
+      showToast('Notification settings saved successfully', 'success');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to save settings.'));
+      showToast('Failed to save settings', 'error');
     } finally {
       setSaving(false);
     }
@@ -60,19 +63,19 @@ export default function AlertSettings() {
   }
 
   return (
-    <Box sx={{ maxWidth: 680 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3 }}>
-        <NotificationsActiveIcon color="primary" />
-        <Typography variant="h5" fontWeight={700}>Notification & Alert Settings</Typography>
-      </Stack>
+    <Box sx={{ maxWidth: 780, pb: 4 }}>
+      <PageHeader
+        icon={<NotificationsActiveIcon />}
+        title="Notification & Alert Settings"
+        subtitle="Configure automated SLA breach warnings, email distribution lists, and SMS alerts"
+      />
 
-      {error   && <Alert severity="error"   sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 1.5 }} onClose={() => setError('')}>{error}</Alert>}
 
       {settings && (
-        <Stack spacing={2}>
+        <Stack spacing={2.5}>
           {/* SLA thresholds */}
-          <Paper sx={{ p: 2.5 }}>
+          <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>SLA Thresholds</Typography>
             <Divider sx={{ mb: 2 }} />
 
@@ -81,56 +84,70 @@ export default function AlertSettings() {
                 label="SLA Warning Threshold (hours)"
                 type="number"
                 size="small"
-                value={settings.sla_warning_hours}
+                value={settings.sla_warning_hours ?? 48}
                 onChange={(e) => setSettings((s) => ({ ...s, sla_warning_hours: Number(e.target.value) }))}
-                helperText="Send a warning notification this many hours before the SLA deadline"
-                inputProps={{ min: 1, max: 168 }}
-                sx={{ maxWidth: 280 }}
+                helperText="Send early warning notifications this many hours before the SLA deadline expires"
+                slotProps={{ htmlInput: { min: 1, max: 168 } }}
+                sx={{ maxWidth: 320 }}
               />
             </Stack>
           </Paper>
 
           {/* Email recipients */}
-          <Paper sx={{ p: 2.5 }}>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>SLA Breach Email Recipients</Typography>
+          <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle1" fontWeight={700} gutterBottom>SLA Breach Email Distribution List</Typography>
             <Divider sx={{ mb: 2 }} />
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              These email addresses receive a notification whenever a complaint breaches its SLA deadline.
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              These regulatory and carrier NOC email addresses receive automatic email dispatch when a complaint exceeds SLA resolution limits.
             </Typography>
 
-            <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+            <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
               <TextField
-                size="small" placeholder="email@natca.sl" value={emailInput}
+                size="small"
+                placeholder="regulatory-noc@natca.gov.sl"
+                value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEmail(); } }}
                 sx={{ flex: 1 }}
               />
               <Tooltip title="Add email">
-                <Button variant="outlined" size="small" onClick={addEmail}
-                  startIcon={<AddIcon />} disabled={!emailInput.trim()}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={addEmail}
+                  startIcon={<AddIcon />}
+                  disabled={!emailInput.trim()}
+                  sx={{ borderRadius: 1.5, px: 2.5, fontWeight: 600 }}
+                >
                   Add
                 </Button>
               </Tooltip>
             </Stack>
 
-            <Stack direction="row" flexWrap="wrap" spacing={0.75} useFlexGap>
+            <Stack direction="row" flexWrap="wrap" spacing={1} useFlexGap>
               {(settings.sla_breach_emails || []).length === 0 && (
                 <Typography variant="caption" color="text.disabled">No email recipients configured</Typography>
               )}
               {(settings.sla_breach_emails || []).map((email) => (
-                <Chip key={email} label={email} size="small" variant="outlined"
+                <Chip
+                  key={email}
+                  label={email}
+                  size="small"
+                  variant="outlined"
                   onDelete={() => removeEmail(email)}
-                  deleteIcon={<CloseIcon fontSize="small" />} />
+                  deleteIcon={<CloseIcon fontSize="small" />}
+                  sx={{ borderRadius: 1, fontWeight: 600 }}
+                />
               ))}
             </Stack>
           </Paper>
 
           {/* Toggles */}
-          <Paper sx={{ p: 2.5 }}>
+          <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>Notification Channels</Typography>
-            <Divider sx={{ mb: 1 }} />
+            <Divider sx={{ mb: 2 }} />
 
-            <Stack spacing={1}>
+            <Stack spacing={2}>
               <FormControlLabel
                 control={
                   <Switch
@@ -141,9 +158,9 @@ export default function AlertSettings() {
                 }
                 label={
                   <Box>
-                    <Typography variant="body2" fontWeight={600}>SMS Alerts</Typography>
+                    <Typography variant="body2" fontWeight={600}>SMS Alert Dispatch</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Send SMS to registered officer phone when an SLA is breached
+                      Send SMS to registered officer mobile numbers upon critical SLA breach
                     </Typography>
                   </Box>
                 }
@@ -158,9 +175,9 @@ export default function AlertSettings() {
                 }
                 label={
                   <Box>
-                    <Typography variant="body2" fontWeight={600}>New Complaint Notifications</Typography>
+                    <Typography variant="body2" fontWeight={600}>New Complaint In-App Notifications</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Send in-app notification to all admin staff when a new complaint is submitted
+                      Send real-time alerts to all logged-in administrative analysts when new cases are submitted
                     </Typography>
                   </Box>
                 }
@@ -168,10 +185,15 @@ export default function AlertSettings() {
             </Stack>
           </Paper>
 
-          <Box>
-            <Button variant="contained" disableElevation startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
-              onClick={save} disabled={saving}>
-              {saving ? 'Saving…' : 'Save Settings'}
+          <Box sx={{ pt: 1 }}>
+            <Button
+              variant="contained"
+              startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+              onClick={save}
+              disabled={saving}
+              sx={{ borderRadius: 1.5, px: 3, py: 1, fontWeight: 600 }}
+            >
+              {saving ? 'Saving…' : 'Save Notification Settings'}
             </Button>
           </Box>
         </Stack>

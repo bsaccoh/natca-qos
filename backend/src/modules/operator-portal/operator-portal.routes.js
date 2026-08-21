@@ -42,7 +42,7 @@ router.get('/complaints/:id', asyncHandler(async (req, res) => {
 router.patch('/complaints/:id/respond', asyncHandler(async (req, res) => {
   const { note, status } = z.object({
     note:   z.string().min(1),
-    status: z.enum(['RESOLVED', 'UNDER_REVIEW', 'ESCALATED', 'CLOSED']).optional(),
+    status: z.enum(['RESOLVED', 'UNDER_REVIEW', 'ESCALATED']).optional(),
   }).parse(req.body);
 
   // Verify ownership

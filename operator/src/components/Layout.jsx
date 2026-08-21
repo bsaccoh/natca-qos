@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar, Box, Drawer, Toolbar, Typography, List, ListItemButton, ListItemIcon,
-  ListItemText, IconButton, Avatar, Chip, Divider, Tooltip, Stack,
+  ListItemText, IconButton, Divider, Tooltip, Stack,
   useMediaQuery, useTheme, Badge, Popover,
 } from '@mui/material';
 import DashboardIcon     from '@mui/icons-material/Dashboard';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import WarningAmberIcon  from '@mui/icons-material/WarningAmber';
 import VerifiedUserIcon  from '@mui/icons-material/VerifiedUser';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LogoutIcon        from '@mui/icons-material/Logout';
 import Brightness4Icon   from '@mui/icons-material/Brightness4';
 import Brightness7Icon   from '@mui/icons-material/Brightness7';
@@ -17,16 +19,15 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import DoneAllIcon       from '@mui/icons-material/DoneAll';
 import { useAuth }       from '../auth/AuthContext.jsx';
 import { useColorMode }  from '../theme/ColorMode.jsx';
-import { get, patch }    from '../api/client.js';
+import { operatorService } from '../services/operatorService.js';
 
 const FULL = 240;
 const MINI = 64;
 
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-
 const NAV = [
   { to: '/',           label: 'Dashboard',  icon: <DashboardIcon /> },
   { to: '/complaints', label: 'Complaints', icon: <ReportProblemIcon /> },
+  { to: '/incidents',  label: 'Incidents',  icon: <WarningAmberIcon /> },
   { to: '/kyc',        label: 'KYC / SIM',  icon: <VerifiedUserIcon /> },
   { to: '/profile',    label: 'My Profile', icon: <AccountCircleIcon /> },
 ];
@@ -40,12 +41,14 @@ function NotificationBell({ socket }) {
   const loadNotifs = useCallback(async () => {
     try {
       const [cRes, lRes] = await Promise.all([
-        get('/notifications/count'),
-        get('/notifications?limit=10'),
+        operatorService.getNotificationCount(),
+        operatorService.getNotifications({ limit: 10 }),
       ]);
       setUnread(cRes.data?.unread || 0);
       setNotifs(lRes.data?.rows || []);
-    } catch {}
+    } catch {
+      /* silent */
+    }
   }, []);
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
@@ -60,63 +63,70 @@ function NotificationBell({ socket }) {
     return () => socket.off('notification', handleNew);
   }, [socket]);
 
-  const open = Boolean(anchorEl);
+  const handleOpen = (e) => setAnchorEl(e.currentTarget);
+  const handleClose = () => setAnchorEl(null);
 
-  const markRead = async (id, data) => {
+  const handleMarkAllRead = async () => {
     try {
-      await patch(`/notifications/${id}/read`, {});
-      setUnread((u) => Math.max(0, u - 1));
-      setNotifs((prev) => prev.map((n) => n.notification_id === id ? { ...n, is_read: true } : n));
-      if (data?.complaint_ref) navigate(`/complaints?search=${data.complaint_ref}`);
-      setAnchorEl(null);
-    } catch {}
-  };
-
-  const markAllRead = async () => {
-    try {
-      await patch('/notifications/read-all', {});
+      await operatorService.markNotificationsRead();
       setUnread(0);
       setNotifs((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    } catch {}
+    } catch {
+      /* silent */
+    }
+  };
+
+  const handleItemClick = (n) => {
+    handleClose();
+    if (n.entity_type === 'COMPLAINT' && n.entity_id) {
+      navigate(`/complaints/${n.entity_id}`);
+    } else if (n.entity_type === 'INCIDENT') {
+      navigate('/incidents');
+    }
   };
 
   return (
     <>
       <Tooltip title="Notifications">
-        <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ color: 'text.primary' }}>
-          <Badge badgeContent={unread} color="error"><NotificationsIcon /></Badge>
+        <IconButton onClick={handleOpen} sx={{ color: 'text.primary' }}>
+          <Badge badgeContent={unread} color="error">
+            <NotificationsIcon />
+          </Badge>
         </IconButton>
       </Tooltip>
-      <Popover open={open} anchorEl={anchorEl} onClose={() => setAnchorEl(null)}
+
+      <Popover
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        onClose={handleClose}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { width: 320, maxHeight: 400, display: 'flex', flexDirection: 'column', borderRadius: 1.5 } } }}>
-        <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+        PaperProps={{ sx: { width: 340, maxHeight: 420, borderRadius: 2 } }}
+      >
+        <Box sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider' }}>
           <Typography variant="subtitle2" fontWeight={700}>Notifications</Typography>
           {unread > 0 && (
-            <Tooltip title="Mark all as read">
-              <IconButton size="small" onClick={markAllRead}><DoneAllIcon fontSize="small" /></IconButton>
+            <Tooltip title="Mark all read">
+              <IconButton size="small" onClick={handleMarkAllRead}>
+                <DoneAllIcon fontSize="small" />
+              </IconButton>
             </Tooltip>
           )}
         </Box>
-        <List sx={{ p: 0, overflowY: 'auto', flex: 1 }}>
+        <List dense sx={{ p: 0 }}>
           {notifs.length === 0 && (
             <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">No notifications</Typography>
+              <Typography variant="caption" color="text.secondary">No notifications yet</Typography>
             </Box>
           )}
           {notifs.map((n) => (
-            <ListItemButton key={n.notification_id} onClick={() => markRead(n.notification_id, n.data)}
-              sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: n.is_read ? 'transparent' : 'action.hover', px: 2, py: 1.5 }}>
-              <Box>
-                <Typography variant="caption" fontWeight={n.is_read ? 400 : 700} color={n.is_read ? 'text.secondary' : 'primary.main'} gutterBottom display="block">
-                  {n.title}
+            <ListItemButton key={n.notification_id} onClick={() => handleItemClick(n)} sx={{ bgcolor: n.is_read ? 'inherit' : 'action.hover' }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={n.is_read ? 400 : 700} sx={{ fontSize: '0.82rem' }}>
+                  {n.title || n.message}
                 </Typography>
-                <Typography variant="body2" color="text.primary" sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {n.body}
-                </Typography>
-                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
-                  {new Date(n.created_at).toLocaleString()}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.2 }}>
+                  {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Typography>
               </Box>
             </ListItemButton>
@@ -149,7 +159,7 @@ export default function Layout() {
         {expanded && (
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
             <Typography variant="subtitle1" fontWeight={800} sx={{ lineHeight: 1.1, color: 'primary.main', fontSize: '0.92rem' }}>
-              {user?.operator_name || 'NatCA'}
+              {user?.operator_name || 'NatCA NOC'}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', display: 'block', lineHeight: 1 }}>
               {user?.role?.replace(/_/g, ' ') || 'Operator Admin'}
@@ -214,7 +224,7 @@ export default function Layout() {
             </IconButton>
           )}
           <Typography variant="h6" color="text.primary" noWrap fontWeight={700}>
-            {current?.label || 'Operator Portal'}
+            {current?.label || 'Operator NOC Portal'}
           </Typography>
           <Box sx={{ flex: 1 }} />
           <Stack direction="row" spacing={1} alignItems="center">

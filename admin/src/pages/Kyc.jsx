@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, TablePagination, Chip, Button, TextField, InputAdornment,
@@ -12,9 +12,6 @@ import DownloadIcon     from '@mui/icons-material/Download';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
 import CancelIcon       from '@mui/icons-material/Cancel';
-import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
-import RateReviewIcon   from '@mui/icons-material/RateReview';
-import SendIcon         from '@mui/icons-material/Send';
 import FaceIcon         from '@mui/icons-material/Face';
 import ShieldIcon       from '@mui/icons-material/Shield';
 import HistoryIcon      from '@mui/icons-material/History';
@@ -22,64 +19,40 @@ import CellTowerIcon    from '@mui/icons-material/CellTower';
 import ContactPageIcon  from '@mui/icons-material/ContactPage';
 import ReplayIcon       from '@mui/icons-material/Replay';
 import BrokenImageIcon  from '@mui/icons-material/BrokenImage';
-import { get, patch } from '../api/client.js';
-import { exportToCSV } from '../utils/exportUtils.js';
+import { get, patch }   from '../api/client.js';
+import { exportToCSV }  from '../utils/exportUtils.js';
+import PageHeader       from '../components/PageHeader.jsx';
+import { formatDate, getBackendFileUrl } from '../utils/formatters.js';
+import { getOperatorColor, STATUS_COLORS } from '../theme/theme.js';
+import { useToast }     from '../components/ToastContext.jsx';
 
-/* ── constants ───────────────────────────────────────────────────────── */
-const OPERATOR_COLORS = {
-  'Orange SL': '#ff7900',
-  'Africell':  '#8e24aa',
-  'Qcell':     '#5b2d8e',
-  'SierraTel': '#00a3e0',
-  'Sierra Tel': '#00a3e0',
-};
-
-const STATUS_CFG = {
-  PENDING:      { label: 'Pending',      color: '#f59e0b' },
-  UNDER_REVIEW: { label: 'Under Review', color: '#3b82f6' },
-  APPROVED:     { label: 'Approved',     color: '#10b981' },
-  REJECTED:     { label: 'Rejected',     color: '#ef4444' },
-};
-
-function statusCfg(s) {
-  return STATUS_CFG[s?.toUpperCase()] ?? { label: s ?? 'Unknown', color: '#6b7280' };
-}
-
-/* Convert a filesystem path stored in DB to a full URL via the backend */
-const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
-const BACKEND_ORIGIN = API_BASE.replace(/\/api\/v\d+\/?$/, '');
-
-function fileUrl(p) {
-  if (!p) return null;
-  if (p.startsWith('http')) return p;
-  const clean = p.replace(/\\/g, '/').replace(/^.*?(uploads\/)/, 'uploads/');
-  return `${BACKEND_ORIGIN}/${clean}`;
-}
-
-/* ── image display ───────────────────────────────────────────────────── */
 function DocImage({ src, alt, height = 200 }) {
   const [err, setErr] = useState(false);
   if (!src || err) {
     return (
       <Box sx={{
         height, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        bgcolor: 'action.hover', borderRadius: 1, gap: 1,
+        bgcolor: 'action.hover', borderRadius: 1.5, gap: 1, p: 2,
       }}>
         <BrokenImageIcon sx={{ color: 'text.disabled', fontSize: 36 }} />
-        <Typography variant="caption" color="text.disabled">No image</Typography>
+        <Typography variant="caption" color="text.disabled">Image not available</Typography>
       </Box>
     );
   }
   return (
-    <Box component="img" src={src} alt={alt}
+    <Box
+      component="img"
+      src={src}
+      alt={alt}
       onError={() => setErr(true)}
-      sx={{ maxHeight: height, maxWidth: '100%', borderRadius: 1, objectFit: 'cover', display: 'block', mx: 'auto' }} />
+      sx={{ maxHeight: height, maxWidth: '100%', borderRadius: 1.5, objectFit: 'contain', display: 'block', mx: 'auto' }}
+    />
   );
 }
 
-/* ── component ───────────────────────────────────────────────────────── */
 export default function Kyc() {
   const theme = useTheme();
+  const { showToast } = useToast();
   const [rows,    setRows]    = useState([]);
   const [total,   setTotal]   = useState(0);
   const [summary, setSummary] = useState({});
@@ -90,6 +63,7 @@ export default function Kyc() {
   const [search,   setSearch]   = useState('');
   const [opFilter, setOpFilter] = useState('ALL');
   const [stFilter, setStFilter] = useState('ALL');
+  const [operators, setOperators] = useState([]);
 
   const [selected,    setSelected]    = useState(null);
   const [reviewTab,   setReviewTab]   = useState(0);
@@ -98,6 +72,11 @@ export default function Kyc() {
   const [rejectCustom, setRejectCustom] = useState('');
   const [actionErr,   setActionErr]   = useState('');
   const [actionBusy,  setActionBusy]  = useState(false);
+
+  // Load operators list for filter dropdown
+  useEffect(() => {
+    get('/operators').then((res) => setOperators(res.data || [])).catch(() => {});
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -108,7 +87,7 @@ export default function Kyc() {
       if (search.trim())      params.set('search', search.trim());
 
       const [listRes, sumRes] = await Promise.allSettled([
-        get(`/kyc?${params}`),
+        get(`/kyc?${params.toString()}`),
         get('/kyc/summary'),
       ]);
 
@@ -124,7 +103,6 @@ export default function Kyc() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  /* ── fetch full record when opening review ──────────────────────── */
   async function openReview(row) {
     setReviewTab(0);
     setActionErr('');
@@ -133,42 +111,49 @@ export default function Kyc() {
       const res = await get(`/kyc/${row.kyc_id}`);
       if (res?.data) setSelected(res.data);
     } catch {
-      // Fall back to the list-level data
+      // Keep list-level data
     }
   }
 
-  /* ── action helpers ─────────────────────────────────────────────── */
-  async function doAction(fn) {
+  async function doAction(fn, successMsg = 'Action completed successfully') {
     setActionErr('');
     setActionBusy(true);
     try {
       await fn();
       setSelected(null);
       setRejectOpen(false);
+      showToast(successMsg, 'success');
       loadData();
     } catch (e) {
-      setActionErr(e?.response?.data?.message ?? e?.message ?? 'Action failed');
+      const msg = e?.response?.data?.message ?? e?.response?.data?.error ?? e?.message ?? 'Action failed';
+      setActionErr(msg);
+      showToast(msg, 'error');
     } finally {
       setActionBusy(false);
     }
   }
 
-  const handleApprove = () => doAction(() =>
-    patch(`/kyc/${selected.kyc_id}/approve`, {})
+  const handleApprove = () => doAction(
+    () => patch(`/kyc/${selected.kyc_id}/approve`, {}),
+    'KYC submission approved and subscriber verified'
   );
 
-  const handleRequestInfo = () => doAction(() =>
-    patch(`/kyc/${selected.kyc_id}/request-info`, { note: 'Resubmission requested by NatCA reviewer' })
+  const handleRequestInfo = () => doAction(
+    () => patch(`/kyc/${selected.kyc_id}/request-info`, { note: 'Resubmission requested by NatCA reviewer' }),
+    'Resubmission requested from subscriber'
   );
 
   const handleConfirmReject = () => {
     const reason = rejectReason === 'OTHER' ? rejectCustom.trim() : rejectReason;
     if (!reason) { setActionErr('Please specify a rejection reason.'); return; }
-    doAction(() => patch(`/kyc/${selected.kyc_id}/reject`, { reason }));
+    doAction(
+      () => patch(`/kyc/${selected.kyc_id}/reject`, { reason }),
+      'KYC submission rejected'
+    );
   };
 
   const handleExportCSV = () => {
-    exportToCSV('NatCA_KYC_Registry', rows.map(r => ({
+    exportToCSV('NatCA_KYC_Registry', rows.map((r) => ({
       KYC_Ref:       r.kyc_reference,
       Name:          `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim() || r.phone,
       Phone:         r.phone,
@@ -178,46 +163,52 @@ export default function Kyc() {
       ID_Type:       r.id_type ?? '',
       Status:        r.status,
       Rejection:     r.rejection_reason ?? '',
-      Submitted:     r.created_at ? new Date(r.created_at).toLocaleString() : '',
+      Submitted:     r.created_at ? formatDate(r.created_at) : '',
     })));
   };
 
-  /* ── derived counts from summary API ──────────────────────────────── */
   const kpis = [
-    { label: 'Total',        val: summary.total        ?? 0, color: '#2563eb' },
-    { label: 'Pending',      val: summary.pending      ?? 0, color: '#f59e0b' },
-    { label: 'Approved',     val: summary.approved     ?? 0, color: '#10b981' },
-    { label: 'Rejected',     val: summary.rejected     ?? 0, color: '#ef4444' },
+    { label: 'Total Registrations', val: summary.total    ?? 0, color: '#2563eb' },
+    { label: 'Pending Review',      val: summary.pending  ?? 0, color: '#f59e0b' },
+    { label: 'Approved & Active',   val: summary.approved ?? 0, color: '#10b981' },
+    { label: 'Rejected',            val: summary.rejected ?? 0, color: '#ef4444' },
   ];
 
   return (
     <Box sx={{ width: '100%', minHeight: '100%', pb: 4 }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Box sx={{ width: 40, height: 40, borderRadius: 1.5, bgcolor: alpha(theme.palette.primary.main, 0.12), color: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <VerifiedUserIcon />
-          </Box>
-          <Box>
-            <Typography variant="h5" fontWeight={700} color="text.primary">SIM KYC Verification</Typography>
-            <Typography variant="body2" color="text.secondary">National Subscriber Registry — identity review &amp; operator routing</Typography>
-          </Box>
-        </Stack>
-        <Stack direction="row" spacing={1.5}>
-          <Button startIcon={<RefreshIcon />} variant="outlined" onClick={loadData} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
-            Refresh
-          </Button>
-          <Button startIcon={<DownloadIcon />} variant="contained" onClick={handleExportCSV} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
-            Export CSV
-          </Button>
-        </Stack>
-      </Box>
+      <PageHeader
+        icon={<VerifiedUserIcon />}
+        title="SIM KYC & Identity Management"
+        subtitle="National Subscriber Registry — review identity documents, facial biometric matches, and carrier links"
+        actions={
+          <Stack direction="row" spacing={1.5}>
+            <Button
+              startIcon={<RefreshIcon />}
+              variant="outlined"
+              onClick={loadData}
+              sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+            >
+              Refresh
+            </Button>
+            <Button
+              startIcon={<DownloadIcon />}
+              variant="contained"
+              onClick={handleExportCSV}
+              sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+            >
+              Export CSV
+            </Button>
+          </Stack>
+        }
+      />
 
       {/* KPI cards */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(4,1fr)' }, gap: 2, mb: 3 }}>
-        {kpis.map(k => (
-          <Paper key={k.label} sx={{ p: 2.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" fontWeight={700} color="text.secondary">{k.label.toUpperCase()}</Typography>
+        {kpis.map((k) => (
+          <Paper key={k.label} sx={{ p: 2.5, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {k.label}
+            </Typography>
             <Typography variant="h3" fontWeight={800} sx={{ color: k.color, mt: 0.75 }}>
               {loading ? <CircularProgress size={28} sx={{ color: k.color }} /> : k.val}
             </Typography>
@@ -226,19 +217,51 @@ export default function Kyc() {
       </Box>
 
       {/* Filters */}
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+      <Paper sx={{ p: 2.5, mb: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
           <TextField
             placeholder="Search by reference, name, phone, or NIN…"
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
-            size="small" fullWidth
-            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            size="small"
+            fullWidth
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
           />
+
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel>Operator</InputLabel>
+            <Select
+              value={opFilter}
+              label="Operator"
+              onChange={(e) => { setOpFilter(e.target.value); setPage(0); }}
+              sx={{ borderRadius: 1.5 }}
+            >
+              <MenuItem value="ALL">All Operators</MenuItem>
+              {operators.map((op) => (
+                <MenuItem key={op.operator_id} value={String(op.operator_id)}>
+                  {op.operator_name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>Status</InputLabel>
-            <Select value={stFilter} label="Status" onChange={e => { setStFilter(e.target.value); setPage(0); }} sx={{ borderRadius: 1.5 }}>
+            <Select
+              value={stFilter}
+              label="Status"
+              onChange={(e) => { setStFilter(e.target.value); setPage(0); }}
+              sx={{ borderRadius: 1.5 }}
+            >
               <MenuItem value="ALL">All Statuses</MenuItem>
               <MenuItem value="PENDING">Pending</MenuItem>
               <MenuItem value="UNDER_REVIEW">Under Review</MenuItem>
@@ -250,15 +273,15 @@ export default function Kyc() {
       </Paper>
 
       {/* Table */}
-      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
         <Table>
-          <TableHead sx={{ bgcolor: t => alpha(t.palette.primary.main, 0.04) }}>
+          <TableHead sx={{ bgcolor: (t) => alpha(t.palette.primary.main, 0.04) }}>
             <TableRow>
-              <TableCell sx={{ fontWeight: 700 }}>KYC Ref &amp; Date</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>KYC Ref & Date</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Subscriber</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>NIN / Doc Type</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Operator</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Risk</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Risk Score</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
               <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
             </TableRow>
@@ -266,72 +289,97 @@ export default function Kyc() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={32} />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
-                  <Typography color="text.secondary">No KYC submissions found</Typography>
+                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                  <Typography color="text.secondary">No KYC submissions match your search</Typography>
                 </TableCell>
               </TableRow>
-            ) : rows.map(row => {
-              const opColor = OPERATOR_COLORS[row.operator_name] ?? '#2563eb';
-              const cfg     = statusCfg(row.status);
-              const name    = `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || row.phone;
-              return (
-                <TableRow key={row.kyc_id} hover>
-                  <TableCell>
-                    <Typography variant="subtitle2" fontWeight={800} color="primary.main" sx={{ fontFamily: 'monospace' }}>
-                      {row.kyc_reference}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {row.created_at ? new Date(row.created_at).toLocaleDateString() : ''}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="subtitle2" fontWeight={700}>{name}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{row.phone}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={700} color="primary.main" sx={{ fontFamily: 'monospace' }}>
-                      {row.nin ?? '—'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">{row.id_type ?? '—'}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={row.operator_name ?? '—'} size="small" sx={{
-                      fontWeight: 700, fontSize: 11, borderRadius: 1,
-                      bgcolor: alpha(opColor, 0.12), color: opColor, border: `1px solid ${alpha(opColor, 0.3)}`,
-                    }} />
-                  </TableCell>
-                  <TableCell>
-                    {row.risk_score != null && (
+            ) : (
+              rows.map((row) => {
+                const opColor = getOperatorColor(row.operator_name, '#2563eb');
+                const stColor = STATUS_COLORS[row.status] || '#64748b';
+                const name = `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || row.phone;
+                return (
+                  <TableRow key={row.kyc_id} hover>
+                    <TableCell>
+                      <Typography variant="subtitle2" fontWeight={800} color="primary.main" sx={{ fontFamily: 'monospace' }}>
+                        {row.kyc_reference}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.created_at ? formatDate(row.created_at, false) : '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="subtitle2" fontWeight={700}>{name}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                        {row.phone}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={700} color="primary.main" sx={{ fontFamily: 'monospace' }}>
+                        {row.nin ?? '—'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">{row.id_type ?? 'National ID'}</Typography>
+                    </TableCell>
+                    <TableCell>
                       <Chip
-                        label={`${row.risk_score}/100`}
+                        label={row.operator_name ?? '—'}
                         size="small"
-                        color={row.risk_score >= 70 ? 'error' : row.risk_score >= 30 ? 'warning' : 'success'}
-                        sx={{ fontWeight: 700, borderRadius: 1 }}
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: 11,
+                          borderRadius: 1,
+                          bgcolor: alpha(opColor, 0.12),
+                          color: opColor,
+                          border: `1px solid ${alpha(opColor, 0.3)}`,
+                        }}
                       />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={cfg.label} size="small" sx={{
-                      bgcolor: alpha(cfg.color, 0.12), color: cfg.color, fontWeight: 800, borderRadius: 1,
-                    }} />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title="Review case">
-                      <Button size="small" variant="outlined" onClick={() => openReview(row)}
-                        sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
-                        Review
-                      </Button>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+                    </TableCell>
+                    <TableCell>
+                      {row.risk_score != null ? (
+                        <Chip
+                          label={`${row.risk_score}/100`}
+                          size="small"
+                          color={row.risk_score >= 70 ? 'error' : row.risk_score >= 30 ? 'warning' : 'success'}
+                          sx={{ fontWeight: 700, borderRadius: 1 }}
+                        />
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">—</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={row.status?.replace(/_/g, ' ')}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(stColor, 0.12),
+                          color: stColor,
+                          fontWeight: 800,
+                          borderRadius: 1,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Review case">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => openReview(row)}
+                          sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+                        >
+                          Review
+                        </Button>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
         <TablePagination
@@ -346,9 +394,14 @@ export default function Kyc() {
 
       {/* Review Dialog */}
       {selected && (
-        <Dialog open onClose={() => setSelected(null)} maxWidth="md" fullWidth
-          slotProps={{ paper: { sx: { borderRadius: 1.5, minHeight: 580 } } }}>
-          <DialogTitle sx={{ fontWeight: 700, p: 3, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Dialog
+          open
+          onClose={() => setSelected(null)}
+          maxWidth="md"
+          fullWidth
+          slotProps={{ paper: { sx: { borderRadius: 2, minHeight: 580 } } }}
+        >
+          <DialogTitle sx={{ fontWeight: 700, p: 3, pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <Box>
               <Typography variant="h6" fontWeight={800} color="primary.main">
                 {selected.kyc_reference} — KYC Review
@@ -358,10 +411,16 @@ export default function Kyc() {
                 {' · '}{selected.phone}
               </Typography>
             </Box>
-            <Chip label={statusCfg(selected.status).label} size="small" sx={{
-              bgcolor: alpha(statusCfg(selected.status).color, 0.12),
-              color: statusCfg(selected.status).color, fontWeight: 800, borderRadius: 1,
-            }} />
+            <Chip
+              label={selected.status?.replace(/_/g, ' ')}
+              size="small"
+              sx={{
+                bgcolor: alpha(STATUS_COLORS[selected.status] || '#64748b', 0.12),
+                color: STATUS_COLORS[selected.status] || '#64748b',
+                fontWeight: 800,
+                borderRadius: 1,
+              }}
+            />
           </DialogTitle>
 
           <DialogContent dividers sx={{ p: 3 }}>
@@ -381,11 +440,11 @@ export default function Kyc() {
                   {[
                     { label: 'NIN',          val: selected.nin    ?? '—' },
                     { label: 'SIM ICCID',    val: selected.iccid  ?? '—' },
-                    { label: 'ID Expires',   val: selected.id_expiry_date ? new Date(selected.id_expiry_date).toLocaleDateString() : '—' },
-                    { label: 'Date of Birth',val: selected.date_of_birth ? new Date(selected.date_of_birth).toLocaleDateString() : '—' },
+                    { label: 'ID Expires',   val: selected.id_expiry_date ? formatDate(selected.id_expiry_date, false) : '—' },
+                    { label: 'Date of Birth',val: selected.date_of_birth ? formatDate(selected.date_of_birth, false) : '—' },
                     { label: 'Nationality',  val: selected.nationality ?? '—' },
                     { label: 'District',     val: selected.district ?? '—' },
-                  ].map(f => (
+                  ].map((f) => (
                     <Paper key={f.label} sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>{f.label.toUpperCase()}</Typography>
                       <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 0.5, fontFamily: f.label.includes('NIN') || f.label.includes('ICCID') ? 'monospace' : 'inherit' }}>
@@ -399,11 +458,11 @@ export default function Kyc() {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5 }}>
                   <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>Front View</Typography>
-                    <DocImage src={fileUrl(selected.id_front_path)} alt="ID Front" />
+                    <DocImage src={getBackendFileUrl(selected.id_front_path)} alt="ID Front" />
                   </Paper>
                   <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>Back View</Typography>
-                    <DocImage src={fileUrl(selected.id_back_path)} alt="ID Back" />
+                    <DocImage src={getBackendFileUrl(selected.id_back_path)} alt="ID Back" />
                   </Paper>
                 </Box>
               </Stack>
@@ -415,13 +474,18 @@ export default function Kyc() {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1.5fr' }, gap: 3, alignItems: 'center' }}>
                   <Paper sx={{ p: 2.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1.5}>Citizen Selfie</Typography>
-                    {selected.face_image_path
-                      ? <Box component="img" src={fileUrl(selected.face_image_path)} alt="Selfie"
-                          sx={{ width: 140, height: 140, borderRadius: '50%', objectFit: 'cover', border: '3px solid #2563eb', mx: 'auto', display: 'block' }} />
-                      : <Box sx={{ width: 140, height: 140, borderRadius: '50%', bgcolor: 'action.hover', mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <FaceIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
-                        </Box>
-                    }
+                    {selected.face_image_path ? (
+                      <Box
+                        component="img"
+                        src={getBackendFileUrl(selected.face_image_path)}
+                        alt="Selfie"
+                        sx={{ width: 140, height: 140, borderRadius: '50%', objectFit: 'cover', border: '3px solid #2563eb', mx: 'auto', display: 'block' }}
+                      />
+                    ) : (
+                      <Box sx={{ width: 140, height: 140, borderRadius: '50%', bgcolor: 'action.hover', mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FaceIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+                      </Box>
+                    )}
                   </Paper>
                   <Stack spacing={2}>
                     <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
@@ -430,17 +494,29 @@ export default function Kyc() {
                         {selected.face_match_score != null ? `${selected.face_match_score}%` : '—'}
                       </Typography>
                       {selected.face_match_score != null && (
-                        <LinearProgress variant="determinate" value={Math.min(selected.face_match_score, 100)}
-                          sx={{ height: 6, borderRadius: 1, mt: 1, bgcolor: alpha('#10b981', 0.2) }} />
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.min(selected.face_match_score, 100)}
+                          sx={{ height: 6, borderRadius: 1, mt: 1, bgcolor: alpha('#10b981', 0.2) }}
+                        />
                       )}
                     </Paper>
                     <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
                       <Typography variant="caption" fontWeight={700} color="text.secondary">LIVENESS CHECK</Typography>
                       <Stack direction="row" spacing={1} alignItems="center" mt={1}>
-                        {selected.liveness_passed
-                          ? <><CheckCircleIcon color="success" fontSize="small" /><Typography variant="body2" fontWeight={600}>Passed — {selected.liveness_score != null ? `${selected.liveness_score}%` : ''}</Typography></>
-                          : <><CancelIcon color="error" fontSize="small" /><Typography variant="body2" fontWeight={600}>Failed or not run</Typography></>
-                        }
+                        {selected.liveness_passed ? (
+                          <>
+                            <CheckCircleIcon color="success" fontSize="small" />
+                            <Typography variant="body2" fontWeight={600}>
+                              Passed — {selected.liveness_score != null ? `${selected.liveness_score}%` : ''}
+                            </Typography>
+                          </>
+                        ) : (
+                          <>
+                            <CancelIcon color="error" fontSize="small" />
+                            <Typography variant="body2" fontWeight={600}>Failed or not run</Typography>
+                          </>
+                        )}
                       </Stack>
                     </Paper>
                   </Stack>
@@ -454,8 +530,11 @@ export default function Kyc() {
                 <Paper sx={{ p: 2.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
                   <Typography variant="subtitle2" fontWeight={700} mb={1}>Risk Assessment</Typography>
                   <Stack direction="row" spacing={2} alignItems="center" mb={1.5}>
-                    <Typography variant="h3" fontWeight={800}
-                      color={selected.risk_score >= 70 ? 'error.main' : selected.risk_score >= 30 ? 'warning.main' : 'success.main'}>
+                    <Typography
+                      variant="h3"
+                      fontWeight={800}
+                      color={selected.risk_score >= 70 ? 'error.main' : selected.risk_score >= 30 ? 'warning.main' : 'success.main'}
+                    >
                       {selected.risk_score != null ? `${selected.risk_score}/100` : 'N/A'}
                     </Typography>
                     {selected.risk_score != null && (
@@ -479,7 +558,7 @@ export default function Kyc() {
                   )}
                   {selected.operator_confirmed_at && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      Operator confirmed: {new Date(selected.operator_confirmed_at).toLocaleString()}
+                      Operator confirmed: {formatDate(selected.operator_confirmed_at)}
                     </Typography>
                   )}
                 </Paper>
@@ -491,12 +570,12 @@ export default function Kyc() {
               <Stack spacing={2}>
                 <Typography variant="subtitle2" fontWeight={700}>Audit Trail</Typography>
                 {[
-                  { label: 'Submitted',         val: selected.created_at        ? new Date(selected.created_at).toLocaleString()        : null },
-                  { label: 'Last updated',       val: selected.updated_at        ? new Date(selected.updated_at).toLocaleString()        : null },
-                  { label: 'Reviewed at',        val: selected.reviewed_at       ? new Date(selected.reviewed_at).toLocaleString()       : null },
-                  { label: 'Operator confirmed', val: selected.operator_confirmed_at ? new Date(selected.operator_confirmed_at).toLocaleString() : null },
-                  { label: 'Expires',            val: selected.expires_at        ? new Date(selected.expires_at).toLocaleDateString()    : null },
-                ].filter(e => e.val).map(e => (
+                  { label: 'Submitted',         val: selected.created_at ? formatDate(selected.created_at) : null },
+                  { label: 'Last updated',       val: selected.updated_at ? formatDate(selected.updated_at) : null },
+                  { label: 'Reviewed at',        val: selected.reviewed_at ? formatDate(selected.reviewed_at) : null },
+                  { label: 'Operator confirmed', val: selected.operator_confirmed_at ? formatDate(selected.operator_confirmed_at) : null },
+                  { label: 'Expires',            val: selected.expires_at ? formatDate(selected.expires_at, false) : null },
+                ].filter((e) => e.val).map((e) => (
                   <Paper key={e.label} sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
                     <Stack direction="row" justifyContent="space-between">
                       <Typography variant="subtitle2" fontWeight={700}>{e.label}</Typography>
@@ -510,18 +589,36 @@ export default function Kyc() {
 
           <DialogActions sx={{ p: 2.5, px: 3, justifyContent: 'space-between', bgcolor: alpha(theme.palette.background.default, 0.5) }}>
             <Stack direction="row" spacing={1}>
-              <Button startIcon={<ReplayIcon />} variant="outlined" color="warning" onClick={handleRequestInfo} disabled={actionBusy}
-                sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+              <Button
+                startIcon={<ReplayIcon />}
+                variant="outlined"
+                color="warning"
+                onClick={handleRequestInfo}
+                disabled={actionBusy}
+                sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+              >
                 Request Resubmission
               </Button>
             </Stack>
             <Stack direction="row" spacing={1}>
-              <Button startIcon={<CancelIcon />} variant="outlined" color="error" onClick={() => { setRejectOpen(true); setActionErr(''); }}
-                disabled={actionBusy} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+              <Button
+                startIcon={<CancelIcon />}
+                variant="outlined"
+                color="error"
+                onClick={() => { setRejectOpen(true); setActionErr(''); }}
+                disabled={actionBusy}
+                sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+              >
                 Reject
               </Button>
-              <Button startIcon={<CheckCircleIcon />} variant="contained" color="success" onClick={handleApprove}
-                disabled={actionBusy} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+              <Button
+                startIcon={<CheckCircleIcon />}
+                variant="contained"
+                color="success"
+                onClick={handleApprove}
+                disabled={actionBusy}
+                sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+              >
                 {actionBusy ? <CircularProgress size={18} color="inherit" /> : 'Approve KYC'}
               </Button>
             </Stack>
@@ -530,13 +627,25 @@ export default function Kyc() {
       )}
 
       {/* Rejection reason dialog */}
-      <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} maxWidth="xs" fullWidth
-        slotProps={{ paper: { sx: { borderRadius: 1.5 } } }}>
+      <Dialog
+        open={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: 2 } } }}
+      >
         <DialogTitle sx={{ fontWeight: 700 }}>Rejection Reason</DialogTitle>
         <DialogContent dividers>
           {actionErr && <Alert severity="error" sx={{ mb: 2 }}>{actionErr}</Alert>}
           <Stack spacing={2} pt={1}>
-            <TextField select label="Category" value={rejectReason} onChange={e => setRejectReason(e.target.value)} fullWidth size="small">
+            <TextField
+              select
+              label="Category"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              fullWidth
+              size="small"
+            >
               <MenuItem value="Blurred ID Photo">Blurred / Unreadable ID Photo</MenuItem>
               <MenuItem value="NIN Name Mismatch">NIN Database Name Mismatch</MenuItem>
               <MenuItem value="Expired ID Document">Expired Identity Document</MenuItem>
@@ -545,14 +654,29 @@ export default function Kyc() {
               <MenuItem value="OTHER">Custom reason…</MenuItem>
             </TextField>
             {rejectReason === 'OTHER' && (
-              <TextField label="Specify reason" value={rejectCustom} onChange={e => setRejectCustom(e.target.value)} fullWidth multiline rows={3} size="small" />
+              <TextField
+                label="Specify reason"
+                value={rejectCustom}
+                onChange={(e) => setRejectCustom(e.target.value)}
+                fullWidth
+                multiline
+                rows={3}
+                size="small"
+              />
             )}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setRejectOpen(false)} sx={{ borderRadius: 1.5, textTransform: 'none' }}>Cancel</Button>
-          <Button variant="contained" color="error" onClick={handleConfirmReject} disabled={actionBusy}
-            sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+          <Button onClick={() => setRejectOpen(false)} sx={{ borderRadius: 1.5, textTransform: 'none' }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmReject}
+            disabled={actionBusy}
+            sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+          >
             {actionBusy ? <CircularProgress size={18} color="inherit" /> : 'Confirm Rejection'}
           </Button>
         </DialogActions>

@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Box, Paper, Typography, TextField, IconButton, Button, Avatar, Chip, Stack,
+  Box, Paper, Typography, TextField, Button, Avatar, Chip, Stack,
   Table, TableBody, TableCell, TableHead, TableRow, TableContainer, CircularProgress,
-  useTheme, alpha
+  alpha,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
@@ -10,13 +10,13 @@ import PersonIcon from '@mui/icons-material/Person';
 import StorageIcon from '@mui/icons-material/Storage';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import { post } from '../api/client.js';
+import PageHeader from '../components/PageHeader.jsx';
 
 const SUGGESTIONS = [
-  "Summarize top SLA breaches across operators",
-  "Compare Africell vs Orange data speed KPIs",
-  "List critical incidents in Freetown this week",
-  "Generate QoS compliance executive report"
+  'Summarize top SLA breaches across operators',
+  'Compare Africell vs Orange data speed KPIs',
+  'List critical network incidents this week',
+  'Generate QoS compliance executive overview',
 ];
 
 export default function AiAssistant() {
@@ -24,16 +24,15 @@ export default function AiAssistant() {
     {
       id: 1,
       sender: 'bot',
-      text: "Hello! I am the NatCA AI Regulatory Assistant. Ask me about operator SLA performance, complaint metrics, network outages, or SIM KYC compliance data.",
+      text: 'Hello! I am the NatCA AI Regulatory Assistant. Ask me about operator SLA performance, complaint metrics, network outages, or SIM KYC compliance data.',
       provenance: 'SQL Database',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    },
   ]);
   const [input, setInput] = useState('');
   const [thinkingStep, setThinkingStep] = useState('');
   const [loading, setLoading] = useState(false);
   const endRef = useRef(null);
-  const theme = useTheme();
 
   const scrollToBottom = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,7 +60,7 @@ export default function AiAssistant() {
       id: Date.now(),
       sender: 'user',
       text: query,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -70,26 +69,25 @@ export default function AiAssistant() {
 
     // Live thinking indicator sequence
     setThinkingStep('Connecting to data warehouse...');
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 400));
 
     setThinkingStep('Parsing regulatory telemetry & SQL queries...');
-    await new Promise((r) => setTimeout(r, 700));
+    await new Promise((r) => setTimeout(r, 500));
 
     setThinkingStep('Generating AI insights & tabular metrics...');
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 400));
 
-    // Simulated/Real AI response with tables and markdown
-    let botReplyText = "";
-    let provenance = "LLM AI Reasoning";
+    let botReplyText = '';
+    let provenance = 'LLM AI Reasoning';
 
     if (query.toLowerCase().includes('africell') || query.toLowerCase().includes('orange') || query.toLowerCase().includes('speed')) {
-      provenance = "SQL Database";
+      provenance = 'SQL Database';
       botReplyText = `### Operator Quality of Service Matrix\n\n| Operator | Avg Data Speed | Call Success Rate | Latency | SLA Rate |\n| --- | --- | --- | --- | --- |\n| Orange SL | 24.5 Mbps | 98.2% | 34 ms | 91.5% |\n| Africell | 21.8 Mbps | 97.4% | 42 ms | 88.0% |\n| QCell | 16.2 Mbps | 95.1% | 58 ms | 82.4% |\n| SierraTel | 10.4 Mbps | 91.0% | 85 ms | 70.2% |\n\n**Analysis:** Orange SL currently leads in 4G data throughput, while Africell shows high stability in voice call retention.`;
     } else if (query.toLowerCase().includes('sla') || query.toLowerCase().includes('breach')) {
-      provenance = "SQL Database";
+      provenance = 'SQL Database';
       botReplyText = `### Active SLA Breaches Overview\n\n* **Critical Overdue Cases:** 7 complaints open > 30 days.\n* **Primary Operator:** Orange SL (4 cases), Africell (3 cases).\n* **Top Issue Category:** Slow Data & Billing Disputes.\n\nRecommended Action: Issue regulatory Warning Letter #SL-2026-04.`;
     } else {
-      botReplyText = `Based on current NatCA database records, total complaint volume is **2 cases** across all operators. SLA compliance stands at **100.0%** for new submissions.\n\nIf you need a detailed breakdown by region (Freetown, Bo, Kenema), please specify the geographic region.`;
+      botReplyText = `Based on current NatCA database records, telecom complaint volume remains under standard regulatory tolerances. SLA compliance stands at **100.0%** for newly recorded cases.\n\nIf you need a detailed breakdown by region (Freetown, Bo, Kenema, Makeni), please specify the geographic region.`;
     }
 
     setThinkingStep('');
@@ -102,16 +100,14 @@ export default function AiAssistant() {
         sender: 'bot',
         text: botReplyText,
         provenance,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
     ]);
   };
 
-  // Dynamic Markdown & Table Parser
   const parseAiText = (content) => {
     if (!content) return null;
 
-    // Check for markdown table
     if (content.includes('|')) {
       const lines = content.split('\n');
       const tableLines = lines.filter((l) => l.trim().startsWith('|'));
@@ -119,7 +115,6 @@ export default function AiAssistant() {
 
       if (tableLines.length >= 2) {
         const headers = tableLines[0].split('|').map((s) => s.trim()).filter(Boolean);
-        // skip separator line index 1
         const rows = tableLines.slice(2).map((rowLine) =>
           rowLine.split('|').map((s) => s.trim()).filter(Boolean)
         );
@@ -131,9 +126,9 @@ export default function AiAssistant() {
                 {textOutside}
               </Typography>
             )}
-            <TableContainer component={Paper} sx={{ borderRadius: 0, my: 1.5, border: '1px solid', borderColor: 'divider' }}>
+            <TableContainer component={Paper} sx={{ borderRadius: 1.5, my: 1.5, border: '1px solid', borderColor: 'divider' }}>
               <Table size="small">
-                <TableHead>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     {headers.map((h, idx) => (
                       <TableCell key={idx} sx={{ fontWeight: 700 }}>{h}</TableCell>
@@ -164,40 +159,34 @@ export default function AiAssistant() {
   };
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <Paper sx={{ p: 2, borderRadius: 0, mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Avatar sx={{ bgcolor: 'primary.main', borderRadius: 0 }}>
-          <AutoAwesomeIcon />
-        </Avatar>
-        <Box>
-          <Typography variant="h6" fontWeight={700}>NatCA AI Regulatory Assistant</Typography>
-          <Typography variant="caption" color="text.secondary">Real-time data analytics, QoS matrices & compliance reasoning</Typography>
-        </Box>
-      </Paper>
+    <Box sx={{ height: 'calc(100vh - 130px)', display: 'flex', flexDirection: 'column' }}>
+      <PageHeader
+        icon={<AutoAwesomeIcon />}
+        title="NatCA AI Regulatory Assistant"
+        subtitle="Natural language telemetry querying, QoS automated reports, and SLA breach analytics"
+      />
 
       {/* Messages Container */}
-      <Paper sx={{ flex: 1, p: 3, borderRadius: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, mb: 2 }}>
+      <Paper sx={{ flex: 1, p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, mb: 2 }}>
         {messages.map((msg) => {
           const isUser = msg.sender === 'user';
           return (
             <Box key={msg.id} sx={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', gap: 1.5 }}>
               {!isUser && (
-                <Avatar sx={{ bgcolor: 'primary.main', width: 34, height: 34, borderRadius: 0 }}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 34, height: 34, borderRadius: 1 }}>
                   <SmartToyIcon fontSize="small" />
                 </Avatar>
               )}
 
-              <Box sx={{ maxWidth: '75%' }}>
+              <Box sx={{ maxWidth: { xs: '90%', md: '75%' } }}>
                 <Paper
                   sx={{
                     p: 2,
-                    borderRadius: 0, // Sharp crisp enterprise borders
+                    borderRadius: 2,
                     bgcolor: isUser ? 'primary.main' : 'background.paper',
                     color: isUser ? '#ffffff' : 'text.primary',
                     border: '1px solid',
                     borderColor: isUser ? 'primary.main' : 'divider',
-                    boxShadow: isUser ? '0 2px 8px rgba(37,99,235,0.2)' : 'none',
                   }}
                 >
                   {parseAiText(msg.text)}
@@ -208,16 +197,16 @@ export default function AiAssistant() {
                     </Typography>
                     {msg.provenance && (
                       <Chip
-                        icon={msg.provenance === 'SQL Database' ? <StorageIcon sx={{ fontSize: 12 }} /> : <PsychologyIcon sx={{ fontSize: 12 }} />}
+                        icon={msg.provenance === 'SQL Database' ? <StorageIcon sx={{ fontSize: '12px !important' }} /> : <PsychologyIcon sx={{ fontSize: '12px !important' }} />}
                         label={msg.provenance}
                         size="small"
                         sx={{
                           height: 18,
                           fontSize: 9,
-                          borderRadius: 0,
+                          borderRadius: 1,
                           bgcolor: msg.provenance === 'SQL Database' ? alpha('#16a34a', 0.15) : alpha('#2563eb', 0.15),
                           color: msg.provenance === 'SQL Database' ? '#16a34a' : '#2563eb',
-                          fontWeight: 700
+                          fontWeight: 700,
                         }}
                       />
                     )}
@@ -226,7 +215,7 @@ export default function AiAssistant() {
               </Box>
 
               {isUser && (
-                <Avatar sx={{ bgcolor: 'secondary.main', width: 34, height: 34, borderRadius: 0 }}>
+                <Avatar sx={{ bgcolor: 'secondary.main', width: 34, height: 34, borderRadius: 1 }}>
                   <PersonIcon fontSize="small" />
                 </Avatar>
               )}
@@ -237,10 +226,10 @@ export default function AiAssistant() {
         {/* Step-by-Step Thinking Indicator */}
         {loading && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, my: 1 }}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 34, height: 34, borderRadius: 0 }}>
+            <Avatar sx={{ bgcolor: 'primary.main', width: 34, height: 34, borderRadius: 1 }}>
               <SmartToyIcon fontSize="small" />
             </Avatar>
-            <Paper sx={{ p: 1.5, borderRadius: 0, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Paper sx={{ p: 1.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <CircularProgress size={16} />
               <Typography variant="caption" fontWeight={600} color="primary.main">
                 {thinkingStep}
@@ -261,22 +250,22 @@ export default function AiAssistant() {
             onClick={() => simulateTyping(s)}
             variant="outlined"
             clickable
-            sx={{ borderRadius: 0, fontWeight: 600, fontSize: 12 }}
+            sx={{ borderRadius: 1.5, fontWeight: 600, fontSize: 12 }}
           />
         ))}
       </Stack>
 
       {/* Input Box */}
-      <Paper component="form" onSubmit={(e) => { e.preventDefault(); handleSend(); }} sx={{ p: 1, borderRadius: 0, display: 'flex', gap: 1 }}>
+      <Paper component="form" onSubmit={(e) => { e.preventDefault(); handleSend(); }} sx={{ p: 1, borderRadius: 2, border: '1px solid', borderColor: 'divider', display: 'flex', gap: 1 }}>
         <TextField
           fullWidth
           size="small"
           placeholder="Ask NatCA AI Assistant about complaints, SLA breaches, QoS metrics..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
         />
-        <Button variant="contained" type="submit" endIcon={<SendIcon />} disabled={loading || !input.trim()} sx={{ borderRadius: 0, px: 3 }}>
+        <Button variant="contained" type="submit" endIcon={<SendIcon />} disabled={loading || !input.trim()} sx={{ borderRadius: 1.5, px: 3, fontWeight: 600 }}>
           Send
         </Button>
       </Paper>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, Alert,
-  IconButton, Stack, Checkbox, FormControlLabel, Divider
+  IconButton, Stack, Checkbox, FormControlLabel, Divider, CircularProgress,
 } from '@mui/material';
 import Visibility    from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
@@ -13,6 +13,7 @@ import TrendingUpIcon     from '@mui/icons-material/TrendingUp';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import ArrowForwardIcon   from '@mui/icons-material/ArrowForward';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { getErrorMessage } from '../api/client.js';
 
 /* ── design tokens ────────────────────────────────────────────────── */
 const NAVY     = '#0b1f3a';
@@ -41,7 +42,7 @@ function LogoMark({ size = 64 }) {
 /* ── Feature row ──────────────────────────────────────────────────── */
 function FeatureItem({ icon, title, desc, bgColor }) {
   return (
-    <Stack direction="row" spacing={2} alignItems="flex-start" sx={{ mb: 3.5 }}>
+    <Stack direction="row" spacing={2} sx={{ mb: 3.5, alignItems: 'flex-start' }}>
       <Box sx={{
         width: 44, height: 44, borderRadius: '50%',
         bgcolor: bgColor,
@@ -62,7 +63,7 @@ function FeatureItem({ icon, title, desc, bgColor }) {
 export default function Login() {
   const { login }  = useAuth();
   const navigate   = useNavigate();
-  const [id, setId]         = useState('');
+  const [id, setId]         = useState('admin@natca.gov.sl');
   const [pw, setPw]         = useState('');
   const [show, setShow]     = useState(false);
   const [loading, setLoading] = useState(false);
@@ -74,10 +75,10 @@ export default function Login() {
     setLoading(true);
     setErr('');
     try {
-      const u = await login(id, pw);
-      navigate(u.must_change_password ? '/change-password' : '/');
+      const u = await login(id.trim(), pw);
+      navigate(u?.must_change_password ? '/change-password' : '/');
     } catch (ex) {
-      setErr(ex.response?.data?.error || 'Invalid credentials. Please try again.');
+      setErr(getErrorMessage(ex, 'Invalid credentials. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -115,7 +116,7 @@ export default function Login() {
         <Box sx={{ position: 'relative', zIndex: 2, flex: 1, display: 'flex', flexDirection: 'column', p: { md: 4.5, lg: 5 } }}>
 
           {/* Logo + NatCA wordmark */}
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 6 }}>
+          <Stack direction="row" spacing={2} sx={{ mb: 6, alignItems: 'center' }}>
             <LogoMark size={68} />
             <Box>
               <Typography sx={{
@@ -212,8 +213,7 @@ export default function Login() {
         }}>
 
           {/* Mobile logo */}
-          <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center"
-            sx={{ mb: 4, display: { xs: 'flex', md: 'none' } }}>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 4, display: { xs: 'flex', md: 'none' }, alignItems: 'center', justifyContent: 'center' }}>
             <LogoMark size={48} />
             <Box>
               <Typography sx={{ fontFamily: 'Georgia,serif', fontWeight: 700, fontSize: '1.2rem', color: NAVY }}>NatCA</Typography>
@@ -260,8 +260,8 @@ export default function Login() {
                   }} />
                   <Box
                     component="input" type="email"
-                    placeholder="your@natca.gov.sl"
-                    value={id} onChange={e => setId(e.target.value)}
+                    placeholder="admin@natca.gov.sl"
+                    value={id} onChange={(e) => setId(e.target.value)}
                     required autoComplete="username"
                     sx={{
                       width: '100%', boxSizing: 'border-box',
@@ -270,7 +270,7 @@ export default function Login() {
                       color: TEXT_PRI, fontSize: '0.9rem', fontFamily: 'inherit',
                       outline: 'none', transition: 'all .2s',
                       '&::placeholder': { color: '#b0bec5' },
-                      '&:focus': { borderColor: BLUE, boxShadow: `0 0 0 4px rgba(29,78,216,0.08)`, bgcolor: WHITE },
+                      '&:focus': { borderColor: BLUE, boxShadow: '0 0 0 4px rgba(29,78,216,0.08)', bgcolor: WHITE },
                     }}
                   />
                 </Box>
@@ -292,7 +292,7 @@ export default function Login() {
                   <Box
                     component="input" type={show ? 'text' : 'password'}
                     placeholder="Enter your password"
-                    value={pw} onChange={e => setPw(e.target.value)}
+                    value={pw} onChange={(e) => setPw(e.target.value)}
                     required autoComplete="current-password"
                     sx={{
                       width: '100%', boxSizing: 'border-box',
@@ -301,10 +301,10 @@ export default function Login() {
                       color: TEXT_PRI, fontSize: '0.9rem', fontFamily: 'inherit',
                       outline: 'none', transition: 'all .2s',
                       '&::placeholder': { color: '#b0bec5' },
-                      '&:focus': { borderColor: BLUE, boxShadow: `0 0 0 4px rgba(29,78,216,0.08)`, bgcolor: WHITE },
+                      '&:focus': { borderColor: BLUE, boxShadow: '0 0 0 4px rgba(29,78,216,0.08)', bgcolor: WHITE },
                     }}
                   />
-                  <IconButton size="small" onClick={() => setShow(s => !s)} tabIndex={-1}
+                  <IconButton size="small" onClick={() => setShow((s) => !s)} tabIndex={-1}
                     sx={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>
                     {show ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
                   </IconButton>
@@ -312,16 +312,16 @@ export default function Login() {
               </Box>
 
               {/* Remember / Forgot */}
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                 <FormControlLabel
                   control={<Checkbox size="small" checked={remember}
-                    onChange={e => setRemember(e.target.checked)}
+                    onChange={(e) => setRemember(e.target.checked)}
                     sx={{ color: '#cbd5e1', '&.Mui-checked': { color: BLUE } }} />}
                   label={<Typography sx={{ fontSize: '0.82rem', color: TEXT_SEC }}>Remember me</Typography>}
                 />
-                <Typography component="a" href="#" sx={{
+                <Typography component="span" sx={{
                   fontSize: '0.82rem', color: BLUE, fontWeight: 600,
-                  textDecoration: 'none', '&:hover': { textDecoration: 'underline' },
+                  cursor: 'pointer', '&:hover': { textDecoration: 'underline' },
                 }}>
                   Forgot password?
                 </Typography>
@@ -340,7 +340,7 @@ export default function Login() {
                   '&.Mui-disabled': { bgcolor: '#cbd5e1', color: WHITE },
                 }}
               >
-                {loading ? 'Authenticating…' : 'Sign In'}
+                {loading ? <CircularProgress size={20} color="inherit" /> : 'Sign In'}
               </Button>
             </Stack>
           </form>
@@ -354,8 +354,7 @@ export default function Login() {
         </Box>
 
         {/* Page footer */}
-        <Stack direction="row" spacing={0.8} alignItems="center"
-          sx={{ position: 'absolute', bottom: 24, color: '#94a3b8' }}>
+        <Stack direction="row" spacing={0.8} sx={{ position: 'absolute', bottom: 24, color: '#94a3b8', alignItems: 'center' }}>
           <ShieldOutlinedIcon sx={{ fontSize: 14 }} />
           <Typography sx={{ fontSize: '0.7rem' }}>
             © {new Date().getFullYear()} National Communication Authority · Sierra Leone

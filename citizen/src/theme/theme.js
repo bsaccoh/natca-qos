@@ -19,6 +19,23 @@ export const BRAND = {
   textMute:  '#8a97a8',
 };
 
+export const OPERATOR_COLORS = {
+  'Orange': '#ff7900',
+  'Orange SL': '#ff7900',
+  'Orange Sierra Leone': '#ff7900',
+  'Africell': '#8e24aa',
+  'Qcell': '#5b2d8e',
+  'SierraTel': '#00a3e0',
+  'Sierra Tel': '#00a3e0',
+  'National': '#0b57a4',
+  'National Codes': '#0b57a4',
+};
+
+export const getOperatorColor = (operatorName, fallback = '#0b57a4') => {
+  if (!operatorName) return fallback;
+  return OPERATOR_COLORS[operatorName] || fallback;
+};
+
 const palette = {
   mode: 'light',
   primary:   { main: BRAND.primary, light: '#3a7cc0', dark: BRAND.primaryDk, contrastText: '#ffffff' },
@@ -80,12 +97,13 @@ export function makeTheme() {
         defaultProps: { elevation: 0 },
         styleOverrides: {
           root: {
-            borderRadius: 10,
+            borderRadius: 14,
             border: `1px solid ${BRAND.border}`,
-            transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, border-color 0.2s ease',
             '&:hover': {
-              boxShadow: '0 10px 28px rgba(13,44,84,0.08)',
-              borderColor: alpha(BRAND.primary, 0.35),
+              transform: 'translateY(-2px)',
+              boxShadow: '0 12px 32px rgba(13,44,84,0.12)',
+              borderColor: alpha(BRAND.primary, 0.4),
             },
           },
         },
@@ -93,15 +111,28 @@ export function makeTheme() {
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
-          root: { borderRadius: 8, padding: '9px 22px', transition: 'background-color .18s ease, color .18s ease, border-color .18s ease' },
+          root: { 
+            borderRadius: 12, 
+            padding: '9px 22px', 
+            transition: 'all 0.2s ease-in-out',
+            '&:hover': {
+              transform: 'translateY(-1px)',
+            }
+          },
           sizeLarge: { padding: '12px 28px', fontSize: '1rem' },
           containedPrimary: {
-            backgroundColor: BRAND.primary,
-            '&:hover': { backgroundColor: BRAND.primaryDk },
+            background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.primaryDk} 100%)`,
+            boxShadow: `0 4px 14px ${alpha(BRAND.primary, 0.3)}`,
+            '&:hover': { 
+              boxShadow: `0 6px 20px ${alpha(BRAND.primary, 0.4)}`,
+            },
           },
           containedSecondary: {
-            backgroundColor: BRAND.navy,
-            '&:hover': { backgroundColor: BRAND.navyDeep },
+            background: `linear-gradient(135deg, ${BRAND.navy} 0%, ${BRAND.navyDeep} 100%)`,
+            boxShadow: `0 4px 14px ${alpha(BRAND.navy, 0.3)}`,
+            '&:hover': { 
+              boxShadow: `0 6px 20px ${alpha(BRAND.navy, 0.4)}`,
+            },
           },
           outlinedPrimary: {
             borderColor: alpha(BRAND.primary, 0.4),

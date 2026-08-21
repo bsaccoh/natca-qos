@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Typography, Paper, Stack, Chip, Button, Alert, useTheme, alpha, Divider,
+  Box, Typography, Paper, Stack, Button, Alert, useTheme, Divider,
 } from '@mui/material';
 import RefreshIcon          from '@mui/icons-material/Refresh';
 import SupportAgentIcon     from '@mui/icons-material/SupportAgent';
@@ -15,23 +15,23 @@ import DownloadIcon         from '@mui/icons-material/Download';
 import PictureAsPdfIcon     from '@mui/icons-material/PictureAsPdf';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area,
+  PieChart, Pie, Cell, Legend, AreaChart, Area,
 } from 'recharts';
-import { get } from '../api/client.js';
 import { Loading } from '../components/ui.jsx';
 import MapOverview from '../components/MapOverview.jsx';
+import PageHeader from '../components/PageHeader.jsx';
 import { exportToCSV, exportExecutivePDF } from '../utils/exportUtils.js';
+import { analyticsService } from '../services/analyticsService.js';
+import { getErrorMessage } from '../api/client.js';
 
 const PALETTE = ['#2563eb', '#10b981', '#f59e0b', '#a855f7', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
-
 const STAR_COLORS = { 5: '#10b981', 4: '#84cc16', 3: '#f59e0b', 2: '#f97316', 1: '#ef4444' };
 
 function KpiCard({ label, value, sub, icon, color }) {
-  const theme = useTheme();
   return (
-    <Paper sx={{ p: 2.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+    <Paper sx={{ p: 2.5, borderRadius: 2, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}>
           {label}
         </Typography>
         <Box sx={{ color, display: 'flex' }}>{icon}</Box>
@@ -46,22 +46,10 @@ function KpiCard({ label, value, sub, icon, color }) {
 
 function ChartCard({ title, height = 280, children }) {
   return (
-    <Paper sx={{ p: 3, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
+    <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
       <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={2}>{title}</Typography>
       <Box sx={{ height, width: '100%' }}>{children}</Box>
     </Paper>
-  );
-}
-
-function StarRating({ value }) {
-  const full = Math.round(value || 0);
-  return (
-    <Stack direction="row" spacing={0.25} alignItems="center">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <StarIcon key={s} sx={{ fontSize: 18, color: s <= full ? '#f59e0b' : 'action.disabled' }} />
-      ))}
-      <Typography variant="body2" fontWeight={600} ml={0.5}>{value ? value.toFixed(1) : '—'}</Typography>
-    </Stack>
   );
 }
 
@@ -74,28 +62,31 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     setLoading(true); setErr('');
     try {
-      const r = await get('/analytics/dashboard-kpis');
+      const r = await analyticsService.getDashboardKpis();
       setKpis(r.data);
-    } catch (e) { setErr(e.message); }
-    finally { setLoading(false); }
+    } catch (e) {
+      setErr(getErrorMessage(e, 'Failed to load KPI metrics'));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   if (loading) return <Loading height={400} />;
-  if (err)     return <Box sx={{ p: 3 }}><Alert severity="error" sx={{ borderRadius: 1.5 }}>{err}</Alert></Box>;
+  if (err)     return <Box sx={{ p: 3 }}><Alert severity="error" sx={{ borderRadius: 2 }}>{err}</Alert></Box>;
 
   const cc  = kpis?.complaintCounts || {};
   const kyc = kpis?.kycCounts       || {};
 
   const resolutionRate = cc.total > 0 ? ((cc.resolved / cc.total) * 100).toFixed(1) : 0;
-  const slaCompliance  = cc.total > 0 ? (((cc.total - cc.slaBreached) / cc.total) * 100).toFixed(1) : 100;
+  const slaCompliance  = cc.total > 0 ? (((cc.total - (cc.slaBreached || 0)) / cc.total) * 100).toFixed(1) : 100;
 
   // Build combined operator table: merge assigned + resolved per operator
   const opMap = {};
-  (kpis?.complaintsByOperator || []).forEach(r => { opMap[r.operator] = { operator: r.operator, total: r.total, assigned: 0, resolved: 0 }; });
-  (kpis?.assignedByOperator   || []).forEach(r => { if (opMap[r.operator]) opMap[r.operator].assigned = r.assigned; });
-  (kpis?.resolvedByOperator   || []).forEach(r => { if (opMap[r.operator]) opMap[r.operator].resolved = r.resolved; });
+  (kpis?.complaintsByOperator || []).forEach((r) => { opMap[r.operator] = { operator: r.operator, total: r.total, assigned: 0, resolved: 0 }; });
+  (kpis?.assignedByOperator   || []).forEach((r) => { if (opMap[r.operator]) opMap[r.operator].assigned = r.assigned; });
+  (kpis?.resolvedByOperator   || []).forEach((r) => { if (opMap[r.operator]) opMap[r.operator].resolved = r.resolved; });
   const operatorTable = Object.values(opMap);
 
   const handleExportCSV = () => {
@@ -114,27 +105,29 @@ export default function Dashboard() {
 
   return (
     <Box sx={{ width: '100%', minHeight: '100%', pb: 4 }}>
-
-      {/* ── Header ── */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Box sx={{ width: 40, height: 40, borderRadius: 1.5, bgcolor: alpha(theme.palette.primary.main, 0.12), color: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <SupportAgentIcon fontSize="medium" />
-          </Box>
-          <Box>
-            <Typography variant="h5" fontWeight={700} sx={{ letterSpacing: '-0.02em' }}>KPI Dashboard</Typography>
-            <Typography variant="body2" color="text.secondary">Live complaint, KYC, and customer satisfaction metrics</Typography>
-          </Box>
-        </Stack>
-        <Stack direction="row" spacing={1.5}>
-          <Button startIcon={<RefreshIcon />} variant="outlined" onClick={load} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600, borderColor: 'divider', color: 'text.primary' }}>Refresh</Button>
-          <Button startIcon={<DownloadIcon />} variant="outlined" onClick={handleExportCSV} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600, borderColor: 'divider', color: 'text.primary' }}>CSV</Button>
-          <Button startIcon={<PictureAsPdfIcon />} variant="contained" onClick={() => exportExecutivePDF(kpis)} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>Export PDF</Button>
-        </Stack>
-      </Box>
+      <PageHeader
+        icon={<SupportAgentIcon />}
+        title="Executive KPI Dashboard"
+        subtitle="Live telecom complaint, KYC verification, QoS benchmarks, and customer satisfaction metrics"
+        actions={
+          <Stack direction="row" spacing={1.5}>
+            <Button startIcon={<RefreshIcon />} variant="outlined" onClick={load} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+              Refresh
+            </Button>
+            <Button startIcon={<DownloadIcon />} variant="outlined" onClick={handleExportCSV} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+              CSV
+            </Button>
+            <Button startIcon={<PictureAsPdfIcon />} variant="contained" onClick={() => exportExecutivePDF(kpis)} sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}>
+              Export PDF
+            </Button>
+          </Stack>
+        }
+      />
 
       {/* ── KPI Cards — Complaints ── */}
-      <Typography variant="overline" color="text.disabled" sx={{ display: 'block', mb: 1 }}>Complaints</Typography>
+      <Typography variant="overline" color="text.disabled" sx={{ display: 'block', mb: 1, letterSpacing: '0.06em' }}>
+        Complaints & SLA
+      </Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(3,1fr)', lg: 'repeat(6,1fr)' }, gap: 2, mb: 2 }}>
         <KpiCard label="Total Complaints" value={cc.total ?? 0}      icon={<SupportAgentIcon fontSize="small" />} color="#2563eb" />
         <KpiCard label="Open / Unresolved" value={cc.unresolved ?? 0} icon={<HourglassEmptyIcon fontSize="small" />} color="#f59e0b" />
@@ -145,7 +138,9 @@ export default function Dashboard() {
       </Box>
 
       {/* ── KPI Cards — KYC + CSAT ── */}
-      <Typography variant="overline" color="text.disabled" sx={{ display: 'block', mb: 1 }}>KYC & Satisfaction</Typography>
+      <Typography variant="overline" color="text.disabled" sx={{ display: 'block', mb: 1, letterSpacing: '0.06em' }}>
+        KYC & Satisfaction
+      </Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(3,1fr)', lg: 'repeat(5,1fr)' }, gap: 2, mb: 3 }}>
         <KpiCard label="KYC Requests"   value={kyc.total    ?? 0} icon={<FingerprintIcon fontSize="small" />} color="#2563eb" />
         <KpiCard label="KYC Approved"   value={kyc.approved ?? 0} icon={<VerifiedIcon fontSize="small" />} color="#10b981" sub={`${kyc.total > 0 ? ((kyc.approved / kyc.total) * 100).toFixed(0) : 0}% approval rate`} />
@@ -156,7 +151,7 @@ export default function Dashboard() {
           value={kpis?.csat ? `${kpis.csat.toFixed(1)} / 5` : 'No data'}
           icon={<StarIcon fontSize="small" />}
           color="#f59e0b"
-          sub={(kpis?.ratingDistribution || []).reduce((s, r) => s + r.count, 0) + ' ratings'}
+          sub={`${(kpis?.ratingDistribution || []).reduce((s, r) => s + r.count, 0)} ratings`}
         />
       </Box>
 
@@ -169,17 +164,19 @@ export default function Dashboard() {
           { label: 'SLA breached',   value: tc.slaBreached,   prev: null,                 good: false },
         ];
         return (
-          <Paper variant="outlined" sx={{ px: 2, py: 1.5, mb: 3, borderRadius: 1.5 }}>
+          <Paper variant="outlined" sx={{ px: 2.5, py: 1.75, mb: 3, borderRadius: 2 }}>
             <Stack direction="row" spacing={0} divider={<Divider orientation="vertical" flexItem />}
               sx={{ flexWrap: 'wrap', gap: 0 }}>
-              <Typography variant="overline" color="text.disabled" sx={{ alignSelf: 'center', pr: 2 }}>Today</Typography>
+              <Typography variant="overline" color="text.disabled" sx={{ alignSelf: 'center', pr: 2.5, fontWeight: 800 }}>
+                Today&apos;s Activity
+              </Typography>
               {items.map((item) => {
                 const diff = item.prev != null ? item.value - item.prev : null;
                 const up = diff > 0;
                 const diffColor = diff === 0 ? 'text.disabled'
                   : (item.good ? (up ? 'success.main' : 'error.main') : (up ? 'error.main' : 'success.main'));
                 return (
-                  <Stack key={item.label} direction="row" spacing={1} alignItems="center" sx={{ px: 2, py: 0.5 }}>
+                  <Stack key={item.label} direction="row" spacing={1} alignItems="center" sx={{ px: 2.5, py: 0.5 }}>
                     <Box>
                       <Typography variant="caption" color="text.secondary" display="block">{item.label}</Typography>
                       <Stack direction="row" alignItems="baseline" spacing={0.75}>
@@ -201,21 +198,20 @@ export default function Dashboard() {
 
       {/* ── Row: Trend + Category ── */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2,1fr)' }, gap: 3, mb: 3 }}>
-
         <ChartCard title="30-Day Complaint Trend">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={kpis?.trend || []} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#2563eb" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0}   />
+                  <stop offset="5%"  stopColor={theme.palette.primary.main} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0}   />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
               <XAxis dataKey="day" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <RTooltip />
-              <Area type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={2} fill="url(#trendGrad)" name="Complaints" />
+              <Area type="monotone" dataKey="total" stroke={theme.palette.primary.main} strokeWidth={2} fill="url(#trendGrad)" name="Complaints" />
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -238,7 +234,6 @@ export default function Dashboard() {
             </PieChart>
           </ResponsiveContainer>
         </ChartCard>
-
       </Box>
 
       {/* ── Row: Complaints by Operator (stacked) ── */}
@@ -261,7 +256,6 @@ export default function Dashboard() {
 
       {/* ── Row: Resolution Time + Complaints by District ── */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2,1fr)' }, gap: 3, mb: 3 }}>
-
         <ChartCard title="Avg Resolution Time by Operator (hours)">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
@@ -297,12 +291,10 @@ export default function Dashboard() {
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
-
       </Box>
 
       {/* ── Row: KYC by Operator + Rating Distribution ── */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2,1fr)' }, gap: 3, mb: 3 }}>
-
         <ChartCard title="KYC Requests by Operator">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={kpis?.kycByOperator || []} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -320,7 +312,7 @@ export default function Dashboard() {
         <ChartCard title="Customer Rating Distribution">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={(kpis?.ratingDistribution || []).map(r => ({ ...r, label: '★'.repeat(r.rating) }))}
+              data={(kpis?.ratingDistribution || []).map((r) => ({ ...r, label: '★'.repeat(r.rating) }))}
               margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
             >
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
@@ -335,7 +327,6 @@ export default function Dashboard() {
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
-
       </Box>
 
       {/* ── Row: CSAT by Operator ── */}
@@ -364,7 +355,6 @@ export default function Dashboard() {
       <Box sx={{ width: '100%' }}>
         <MapOverview />
       </Box>
-
     </Box>
   );
 }

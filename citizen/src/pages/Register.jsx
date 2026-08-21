@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box, Button, Paper, Stack, TextField, Typography, Alert, CircularProgress,
-  Stepper, Step, StepLabel, InputAdornment, MenuItem,
+  Stepper, Step, StepLabel, MenuItem,
 } from '@mui/material';
-import CellTowerIcon from '@mui/icons-material/CellTower';
 import { post, get }  from '../api/client.js';
 import { useAuth }    from '../auth/AuthContext.jsx';
+import { BRAND }      from '../theme/theme.js';
 
 const STEPS = ['Account Details', 'Verify Phone', 'Done'];
 
@@ -22,10 +22,9 @@ export default function Register() {
   const [otp, setOtp]   = useState('');
   const [districts, setDistrictList] = useState([]);
 
-  // Load districts once
-  useState(() => {
+  useEffect(() => {
     get('/districts').then((r) => setDistrictList(r.data || [])).catch(() => {});
-  });
+  }, []);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -79,14 +78,14 @@ export default function Register() {
   return (
     <Box sx={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      bgcolor: 'background.default', p: 2,
+      bgcolor: '#f8fafc', p: 2,
     }}>
-      <Paper sx={{ width: '100%', maxWidth: 480, p: { xs: 3, sm: 4 } }}>
+      <Paper elevation={0} sx={{ width: '100%', maxWidth: 480, p: { xs: 3, sm: 4 }, borderRadius: 3, border: `1px solid ${BRAND.border}`, boxShadow: '0 10px 30px rgba(0,0,0,0.06)' }}>
         <Stack alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
           <Box component="img" src="/natca_logo.png" alt="NatCA Logo"
             sx={{ width: 64, height: 64, objectFit: 'contain' }}
           />
-          <Typography variant="h5">Create Account</Typography>
+          <Typography variant="h5" fontWeight={700} sx={{ color: BRAND.navy }}>Create Account</Typography>
           <Typography variant="body2" color="text.secondary">NatCA Citizen Portal</Typography>
         </Stack>
 
@@ -94,7 +93,7 @@ export default function Register() {
           {STEPS.map((l) => <Step key={l}><StepLabel>{l}</StepLabel></Step>)}
         </Stepper>
 
-        {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+        {err && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 2 }}>{err}</Alert>}
 
         {/* ── Step 0 ── */}
         {step === 0 && (
@@ -111,8 +110,8 @@ export default function Register() {
                 <MenuItem value="">— Select district —</MenuItem>
                 {districts.map((d) => <MenuItem key={d.district_id} value={d.district_id}>{d.name}</MenuItem>)}
               </TextField>
-              <Button type="submit" variant="contained" fullWidth size="large" disabled={loading}>
-                {loading ? <CircularProgress size={22} /> : 'Create Account'}
+              <Button type="submit" variant="contained" fullWidth size="large" disabled={loading} sx={{ bgcolor: BRAND.primary, py: 1.3, borderRadius: 2, fontWeight: 700 }}>
+                {loading ? <CircularProgress size={22} color="inherit" /> : 'Create Account'}
               </Button>
             </Stack>
           </form>
@@ -131,10 +130,10 @@ export default function Register() {
                 onChange={(e) => setOtp(e.target.value)}
                 fullWidth
                 autoFocus
-                inputProps={{ maxLength: 6, style: { letterSpacing: '0.3em', fontSize: '1.4rem', textAlign: 'center' } }}
+                slotProps={{ htmlInput: { maxLength: 6, style: { letterSpacing: '0.3em', fontSize: '1.4rem', textAlign: 'center' } } }}
               />
-              <Button type="submit" variant="contained" fullWidth size="large" disabled={loading || otp.length < 6}>
-                {loading ? <CircularProgress size={22} /> : 'Verify Code'}
+              <Button type="submit" variant="contained" fullWidth size="large" disabled={loading || otp.length < 6} sx={{ bgcolor: BRAND.primary, py: 1.3, borderRadius: 2, fontWeight: 700 }}>
+                {loading ? <CircularProgress size={22} color="inherit" /> : 'Verify Code'}
               </Button>
               <Button size="small" onClick={resendOtp} sx={{ alignSelf: 'center' }}>Resend Code</Button>
             </Stack>
@@ -144,12 +143,12 @@ export default function Register() {
         {/* ── Step 2: Done ── */}
         {step === 2 && (
           <Stack spacing={2} alignItems="center">
-            <Typography variant="h6" color="success.main">✓ Registration successful!</Typography>
+            <Typography variant="h6" color="success.main" fontWeight={700}>✓ Registration successful!</Typography>
             <Typography variant="body2" color="text.secondary" textAlign="center">
               Your account has been created. You can now sign in to submit and track complaints.
             </Typography>
-            <Button variant="contained" fullWidth size="large" onClick={goLogin} disabled={loading}>
-              {loading ? <CircularProgress size={22} /> : 'Sign In Now'}
+            <Button variant="contained" fullWidth size="large" onClick={goLogin} disabled={loading} sx={{ bgcolor: BRAND.primary, py: 1.3, borderRadius: 2, fontWeight: 700 }}>
+              {loading ? <CircularProgress size={22} color="inherit" /> : 'Sign In Now'}
             </Button>
           </Stack>
         )}
@@ -157,7 +156,7 @@ export default function Register() {
         <Stack direction="row" justifyContent="center" sx={{ mt: 3 }}>
           <Typography variant="body2">
             Already have an account?{' '}
-            <RouterLink to="/login" style={{ color: 'inherit', fontWeight: 600 }}>Sign In</RouterLink>
+            <RouterLink to="/login" style={{ color: BRAND.primary, fontWeight: 600 }}>Sign In</RouterLink>
           </Typography>
         </Stack>
       </Paper>

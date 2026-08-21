@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, Divider, FormControlLabel, IconButton,
-  InputAdornment, MenuItem, Paper, Select, Stack, Switch, Tab, Table,
+  Alert, Box, Button, Chip, CircularProgress, Divider, IconButton,
+  InputAdornment, Paper, Stack, Switch, Tab, Table,
   TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs,
   TextField, Tooltip, Typography, alpha, useTheme,
 } from '@mui/material';
@@ -23,23 +22,14 @@ import VpnKeyIcon            from '@mui/icons-material/VpnKey';
 import FolderLockIcon        from '@mui/icons-material/FolderShared';
 import BuildIcon             from '@mui/icons-material/Build';
 import PowerSettingsNewIcon  from '@mui/icons-material/PowerSettingsNew';
-import { get, del, put, patch } from '../api/client.js';
-import { useAuth } from '../auth/AuthContext.jsx';
-import { useToast } from '../components/ToastContext.jsx';
+import { get, del, put }     from '../api/client.js';
+import { useAuth }           from '../auth/AuthContext.jsx';
+import { useToast }          from '../components/ToastContext.jsx';
+import PageHeader            from '../components/PageHeader.jsx';
+import ConfirmDialog         from '../components/ConfirmDialog.jsx';
+import { formatDate, timeSince } from '../utils/formatters.js';
+import { ROLE_COLORS }       from '../theme/theme.js';
 
-/* ── helpers ──────────────────────────────────────────────────────────── */
-function fmtDate(ts) {
-  if (!ts) return '—';
-  return new Date(ts).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-function timeSince(ts) {
-  if (!ts) return '—';
-  const s = Math.floor((Date.now() - new Date(ts)) / 1000);
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
 function parseDevice(ua) {
   if (!ua) return 'Unknown device';
   if (ua.includes('Postman')) return 'Postman';
@@ -50,16 +40,6 @@ function parseDevice(ua) {
   return ua.slice(0, 40);
 }
 
-const ROLE_COLOR = {
-  SYSTEM_ADMIN:   '#ef4444',
-  NATCA_ADMIN:    '#2563eb',
-  NATCA_ANALYST:  '#0ea5e9',
-  INSPECTOR:      '#a855f7',
-  OPERATOR_ADMIN: '#f59e0b',
-  CITIZEN:        '#10b981',
-};
-
-/* ── permission matrix ─────────────────────────────────────────────────── */
 const ROLES_ORDER = ['SYSTEM_ADMIN', 'NATCA_ADMIN', 'NATCA_ANALYST', 'INSPECTOR', 'OPERATOR_ADMIN', 'CITIZEN'];
 const PERM_META = [
   { key: 'complaints.view',       group: 'Complaints', label: 'View all complaints' },
@@ -87,7 +67,6 @@ const PERM_META = [
   { key: 'citizen.track',         group: 'Citizen',    label: 'Track own complaints' },
 ];
 
-/* ── default settings fallback ─────────────────────────────────────────── */
 const DEFAULT_SETTINGS = {
   password_min_length:        8,
   password_require_uppercase: true,
@@ -104,52 +83,84 @@ const DEFAULT_SETTINGS = {
   sla_breach_threshold_hours: 72,
 };
 
-/* ══════════════════════════════════════════════════════════════════════
-   TAB 0 — Active Sessions
-═══════════════════════════════════════════════════════════════════════ */
+/* ── TAB 0 — Active Sessions ── */
 function SessionsTab() {
+  const { showToast } = useToast();
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [revoking, setRevoking] = useState(null);
   const [err, setErr]         = useState('');
+  const [confirmRevokeAll, setConfirmRevokeAll] = useState(false);
   const theme = useTheme();
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
-    try { setRows((await get('/admin/sessions')).data || []); }
-    catch { setErr('Failed to load sessions'); }
-    finally { setLoading(false); }
+    try {
+      const res = await get('/admin/sessions');
+      setRows(res.data || []);
+    } catch {
+      setErr('Failed to load active sessions');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const revoke = async (id) => {
     setRevoking(id);
-    try { await del(`/admin/sessions/${id}`); setRows(r => r.filter(s => s.session_id !== id)); }
-    catch { setErr('Revoke failed'); }
-    finally { setRevoking(null); }
+    try {
+      await del(`/admin/sessions/${id}`);
+      setRows((r) => r.filter((s) => s.session_id !== id));
+      showToast('Session revoked successfully', 'success');
+    } catch {
+      showToast('Revoke failed', 'error');
+    } finally {
+      setRevoking(null);
+    }
   };
 
   const revokeAll = async () => {
     setLoading(true);
-    try { await del('/admin/sessions?exceptCurrentUser=1'); await load(); }
-    catch { setErr('Failed to revoke all'); }
-    finally { setLoading(false); }
+    try {
+      await del('/admin/sessions?exceptCurrentUser=1');
+      await load();
+      showToast('All other active sessions revoked', 'success');
+      setConfirmRevokeAll(false);
+    } catch {
+      showToast('Failed to revoke sessions', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6" fontWeight={700}>Active Sessions <Chip label={rows.length} size="small" color="primary" sx={{ ml: 1, fontWeight: 800 }} /></Typography>
+        <Typography variant="h6" fontWeight={700}>
+          Active Sessions <Chip label={rows.length} size="small" color="primary" sx={{ ml: 1, fontWeight: 800 }} />
+        </Typography>
         <Stack direction="row" spacing={1}>
           <Button size="small" startIcon={<RefreshIcon />} onClick={load} sx={{ textTransform: 'none' }}>Refresh</Button>
-          <Button size="small" color="error" variant="outlined" startIcon={<DeleteOutlineIcon />} onClick={revokeAll} disabled={rows.length === 0} sx={{ textTransform: 'none' }}>
+          <Button
+            size="small"
+            color="error"
+            variant="outlined"
+            startIcon={<DeleteOutlineIcon />}
+            onClick={() => setConfirmRevokeAll(true)}
+            disabled={rows.length === 0}
+            sx={{ textTransform: 'none' }}
+          >
             Revoke All Others
           </Button>
         </Stack>
       </Stack>
+
       {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
-      {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box> : (
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+      ) : (
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
@@ -165,41 +176,66 @@ function SessionsTab() {
             </TableHead>
             <TableBody>
               {rows.length === 0 && (
-                <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}><Typography color="text.secondary">No active sessions</Typography></TableCell></TableRow>
-              )}
-              {rows.map(s => (
-                <TableRow key={s.session_id} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={700}>{s.full_name}</Typography>
-                    <Typography variant="caption" color="text.secondary">{s.email}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip size="small" label={s.role_key} sx={{ fontWeight: 700, fontSize: 10, borderRadius: 1, bgcolor: alpha(ROLE_COLOR[s.role_key] || '#888', 0.12), color: ROLE_COLOR[s.role_key] || '#888' }} />
-                  </TableCell>
-                  <TableCell><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{s.ip_address || '—'}</Typography></TableCell>
-                  <TableCell><Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>{parseDevice(s.user_agent)}</Typography></TableCell>
-                  <TableCell><Typography variant="caption">{timeSince(s.created_at)}</Typography></TableCell>
-                  <TableCell><Typography variant="caption" color="text.secondary">{fmtDate(s.expires_at)}</Typography></TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Revoke session">
-                      <IconButton size="small" color="error" onClick={() => revoke(s.session_id)} disabled={revoking === s.session_id}>
-                        {revoking === s.session_id ? <CircularProgress size={16} /> : <DeleteOutlineIcon fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <Typography color="text.secondary">No active sessions</Typography>
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
+              {rows.map((s) => {
+                const roleColor = ROLE_COLORS[s.role_key] || '#888';
+                return (
+                  <TableRow key={s.session_id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={700}>{s.full_name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{s.email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={s.role_key}
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: 10,
+                          borderRadius: 1,
+                          bgcolor: alpha(roleColor, 0.12),
+                          color: roleColor,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{s.ip_address || '—'}</Typography></TableCell>
+                    <TableCell><Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>{parseDevice(s.user_agent)}</Typography></TableCell>
+                    <TableCell><Typography variant="caption">{timeSince(s.created_at)}</Typography></TableCell>
+                    <TableCell><Typography variant="caption" color="text.secondary">{formatDate(s.expires_at)}</Typography></TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="Revoke session">
+                        <IconButton size="small" color="error" onClick={() => revoke(s.session_id)} disabled={revoking === s.session_id}>
+                          {revoking === s.session_id ? <CircularProgress size={16} /> : <DeleteOutlineIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
       )}
+
+      <ConfirmDialog
+        open={confirmRevokeAll}
+        title="Revoke All Other Sessions"
+        message="Are you sure you want to terminate all active sessions across all devices except your current session? Users will need to log in again."
+        confirmLabel="Revoke All"
+        color="error"
+        onConfirm={revokeAll}
+        onClose={() => setConfirmRevokeAll(false)}
+      />
     </Box>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   TAB 1 — Audit Log
-═══════════════════════════════════════════════════════════════════════ */
+/* ── TAB 1 — Audit Log ── */
 function AuditLogTab() {
   const [rows, setRows]       = useState([]);
   const [total, setTotal]     = useState(0);
@@ -218,11 +254,14 @@ function AuditLogTab() {
       if (action)   params.set('action', action);
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo)   params.set('dateTo', dateTo);
-      const r = (await get(`/admin/audit-logs?${params}`)).data;
-      setRows(r.rows || []);
-      setTotal(r.total || 0);
-    } catch { setRows([]); }
-    finally { setLoading(false); }
+      const res = await get(`/admin/audit-logs?${params.toString()}`);
+      setRows(res.data?.rows || []);
+      setTotal(res.data?.total || 0);
+    } catch {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }, [action, dateFrom, dateTo, page]);
 
   useEffect(() => { load(); }, [load]);
@@ -239,19 +278,52 @@ function AuditLogTab() {
   return (
     <Box>
       <Stack direction="row" spacing={1.5} mb={2} flexWrap="wrap" useFlexGap>
-        <TextField size="small" placeholder="Filter by action…" value={action} onChange={e => { setAction(e.target.value); setPage(0); }}
-          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-          sx={{ width: 220, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }} />
-        <TextField size="small" type="date" label="From" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(0); }}
-          InputLabelProps={{ shrink: true }} sx={{ width: 160, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }} />
-        <TextField size="small" type="date" label="To" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(0); }}
-          InputLabelProps={{ shrink: true }} sx={{ width: 160, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }} />
-        <Button size="small" startIcon={<RefreshIcon />} onClick={load} sx={{ textTransform: 'none', ml: 'auto' }}>Refresh</Button>
+        <TextField
+          size="small"
+          placeholder="Filter by action…"
+          value={action}
+          onChange={(e) => { setAction(e.target.value); setPage(0); }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+          sx={{ width: 220, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+        />
+        <TextField
+          size="small"
+          type="date"
+          label="From"
+          value={dateFrom}
+          onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ width: 160, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+        />
+        <TextField
+          size="small"
+          type="date"
+          label="To"
+          value={dateTo}
+          onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ width: 160, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+        />
+        <Button size="small" startIcon={<RefreshIcon />} onClick={load} sx={{ textTransform: 'none', ml: 'auto' }}>
+          Refresh
+        </Button>
       </Stack>
 
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>{total} events total</Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+        {total} events total
+      </Typography>
 
-      {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box> : (
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+      ) : (
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
@@ -266,15 +338,27 @@ function AuditLogTab() {
             </TableHead>
             <TableBody>
               {rows.length === 0 && (
-                <TableRow><TableCell colSpan={6} align="center" sx={{ py: 4 }}><Typography color="text.secondary">No audit events found</Typography></TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <Typography color="text.secondary">No audit events found</Typography>
+                  </TableCell>
+                </TableRow>
               )}
-              {rows.map(r => (
+              {rows.map((r) => (
                 <TableRow key={r.log_id} hover>
                   <TableCell>
-                    <Chip size="small" label={r.action}
-                      sx={{ fontWeight: 700, fontSize: 10, borderRadius: 1,
+                    <Chip
+                      size="small"
+                      label={r.action}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: 10,
+                        borderRadius: 1,
                         bgcolor: alpha(ACTION_COLORS[r.action] || '#64748b', 0.12),
-                        color: ACTION_COLORS[r.action] || '#64748b', maxWidth: 200 }} />
+                        color: ACTION_COLORS[r.action] || '#64748b',
+                        maxWidth: 200,
+                      }}
+                    />
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight={600}>{r.full_name || 'System'}</Typography>
@@ -285,11 +369,13 @@ function AuditLogTab() {
                     {r.entity_id && <Typography variant="caption" color="text.secondary">#{r.entity_id}</Typography>}
                   </TableCell>
                   <TableCell><Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{r.ip_address || '—'}</Typography></TableCell>
-                  <TableCell><Typography variant="caption">{fmtDate(r.created_at)}</Typography></TableCell>
+                  <TableCell><Typography variant="caption">{formatDate(r.created_at)}</Typography></TableCell>
                   <TableCell sx={{ maxWidth: 200 }}>
-                    {r.changes && <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.72rem', wordBreak: 'break-all' }}>
-                      {JSON.stringify(r.changes).slice(0, 80)}
-                    </Typography>}
+                    {r.changes && (
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.72rem', wordBreak: 'break-all' }}>
+                        {JSON.stringify(r.changes).slice(0, 80)}
+                      </Typography>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -300,18 +386,22 @@ function AuditLogTab() {
 
       {total > PAGE && (
         <Stack direction="row" spacing={1} justifyContent="center" mt={2}>
-          <Button size="small" disabled={page === 0} onClick={() => setPage(p => p - 1)} sx={{ textTransform: 'none' }}>← Prev</Button>
-          <Typography variant="body2" sx={{ py: 0.5 }}>Page {page + 1} of {Math.ceil(total / PAGE)}</Typography>
-          <Button size="small" disabled={(page + 1) * PAGE >= total} onClick={() => setPage(p => p + 1)} sx={{ textTransform: 'none' }}>Next →</Button>
+          <Button size="small" disabled={page === 0} onClick={() => setPage((p) => p - 1)} sx={{ textTransform: 'none' }}>
+            ← Prev
+          </Button>
+          <Typography variant="body2" sx={{ py: 0.5 }}>
+            Page {page + 1} of {Math.ceil(total / PAGE)}
+          </Typography>
+          <Button size="small" disabled={(page + 1) * PAGE >= total} onClick={() => setPage((p) => p + 1)} sx={{ textTransform: 'none' }}>
+            Next →
+          </Button>
         </Stack>
       )}
     </Box>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   TAB 2 — Login History
-═══════════════════════════════════════════════════════════════════════ */
+/* ── TAB 2 — Login History ── */
 function LoginHistoryTab() {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(false);
@@ -325,15 +415,19 @@ function LoginHistoryTab() {
     try {
       const params = new URLSearchParams({ limit: PAGE, offset: page * PAGE });
       if (search) params.set('search', search);
-      setRows((await get(`/admin/login-history?${params}`)).data || []);
-    } catch { setRows([]); }
-    finally { setLoading(false); }
+      const res = await get(`/admin/login-history?${params.toString()}`);
+      setRows(res.data || []);
+    } catch {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }, [search, page]);
 
   useEffect(() => { load(); }, [load]);
 
   const sessionStatus = (s) => {
-    if (s.revoked_at) return { label: 'Revoked',  color: '#ef4444' };
+    if (s.revoked_at) return { label: 'Revoked', color: '#ef4444' };
     if (new Date(s.expires_at) < new Date()) return { label: 'Expired', color: '#94a3b8' };
     return { label: 'Active', color: '#10b981' };
   };
@@ -341,14 +435,30 @@ function LoginHistoryTab() {
   return (
     <Box>
       <Stack direction="row" spacing={1.5} mb={2}>
-        <TextField size="small" placeholder="Search by user, email, or IP…" value={search}
-          onChange={e => { setSearch(e.target.value); setPage(0); }}
-          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-          sx={{ flex: 1, maxWidth: 320, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }} />
-        <Button size="small" startIcon={<RefreshIcon />} onClick={load} sx={{ textTransform: 'none' }}>Refresh</Button>
+        <TextField
+          size="small"
+          placeholder="Search by user, email, or IP…"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+          sx={{ flex: 1, maxWidth: 320, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+        />
+        <Button size="small" startIcon={<RefreshIcon />} onClick={load} sx={{ textTransform: 'none' }}>
+          Refresh
+        </Button>
       </Stack>
 
-      {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box> : (
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+      ) : (
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
@@ -364,10 +474,15 @@ function LoginHistoryTab() {
             </TableHead>
             <TableBody>
               {rows.length === 0 && (
-                <TableRow><TableCell colSpan={7} align="center" sx={{ py: 4 }}><Typography color="text.secondary">No login records found</Typography></TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <Typography color="text.secondary">No login records found</Typography>
+                  </TableCell>
+                </TableRow>
               )}
-              {rows.map(s => {
+              {rows.map((s) => {
                 const st = sessionStatus(s);
+                const roleColor = ROLE_COLORS[s.role_key] || '#888';
                 return (
                   <TableRow key={s.session_id} hover>
                     <TableCell>
@@ -375,15 +490,34 @@ function LoginHistoryTab() {
                       <Typography variant="caption" color="text.secondary">{s.email}</Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip size="small" label={s.role_key} sx={{ fontWeight: 700, fontSize: 10, borderRadius: 1, bgcolor: alpha(ROLE_COLOR[s.role_key] || '#888', 0.12), color: ROLE_COLOR[s.role_key] || '#888' }} />
+                      <Chip
+                        size="small"
+                        label={s.role_key}
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: 10,
+                          borderRadius: 1,
+                          bgcolor: alpha(roleColor, 0.12),
+                          color: roleColor,
+                        }}
+                      />
                     </TableCell>
                     <TableCell><Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{s.ip_address || '—'}</Typography></TableCell>
                     <TableCell><Typography variant="body2" noWrap sx={{ maxWidth: 180 }}>{parseDevice(s.user_agent)}</Typography></TableCell>
-                    <TableCell><Typography variant="caption">{fmtDate(s.created_at)}</Typography></TableCell>
-                    <TableCell><Typography variant="caption" color="text.secondary">{fmtDate(s.expires_at)}</Typography></TableCell>
+                    <TableCell><Typography variant="caption">{formatDate(s.created_at)}</Typography></TableCell>
+                    <TableCell><Typography variant="caption" color="text.secondary">{formatDate(s.expires_at)}</Typography></TableCell>
                     <TableCell>
-                      <Chip size="small" label={st.label}
-                        sx={{ fontWeight: 700, fontSize: 10, borderRadius: 1, bgcolor: alpha(st.color, 0.12), color: st.color }} />
+                      <Chip
+                        size="small"
+                        label={st.label}
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: 10,
+                          borderRadius: 1,
+                          bgcolor: alpha(st.color, 0.12),
+                          color: st.color,
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -394,49 +528,54 @@ function LoginHistoryTab() {
       )}
 
       <Stack direction="row" spacing={1} justifyContent="center" mt={2}>
-        <Button size="small" disabled={page === 0} onClick={() => setPage(p => p - 1)} sx={{ textTransform: 'none' }}>← Prev</Button>
+        <Button size="small" disabled={page === 0} onClick={() => setPage((p) => p - 1)} sx={{ textTransform: 'none' }}>
+          ← Prev
+        </Button>
         <Typography variant="body2" sx={{ py: 0.5 }}>Page {page + 1}</Typography>
-        <Button size="small" disabled={rows.length < PAGE} onClick={() => setPage(p => p + 1)} sx={{ textTransform: 'none' }}>Next →</Button>
+        <Button size="small" disabled={rows.length < PAGE} onClick={() => setPage((p) => p + 1)} sx={{ textTransform: 'none' }}>
+          Next →
+        </Button>
       </Stack>
     </Box>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   TAB 3 — Roles & Permissions Matrix
-═══════════════════════════════════════════════════════════════════════ */
+/* ── TAB 3 — Roles & Permissions Matrix ── */
 function PermissionsTab() {
   const theme = useTheme();
   const { user } = useAuth();
-  const toast = useToast();
+  const { showToast } = useToast();
   const isSystemAdmin = user?.role === 'SYSTEM_ADMIN';
-  const groups = [...new Set(PERM_META.map(p => p.group))];
+  const groups = [...new Set(PERM_META.map((p) => p.group))];
 
   const [matrix, setMatrix]     = useState({});
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [dirty, setDirty]       = useState({});
 
+  const loadPermissions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = (await get('/admin/role-permissions')).data || [];
+      const m = {};
+      rows.forEach((r) => { m[`${r.permission_key}::${r.role_key}`] = r.granted; });
+      setMatrix(m);
+    } catch {
+      showToast('Failed to load permissions', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
   useEffect(() => {
-    (async () => {
-      try {
-        const rows = (await get('/admin/role-permissions')).data || [];
-        const m = {};
-        rows.forEach(r => { m[`${r.permission_key}::${r.role_key}`] = r.granted; });
-        setMatrix(m);
-      } catch {
-        toast.error('Failed to load permissions');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    loadPermissions();
+  }, [loadPermissions]);
 
   const toggle = (permKey, role) => {
     const k = `${permKey}::${role}`;
     const next = !matrix[k];
-    setMatrix(prev => ({ ...prev, [k]: next }));
-    setDirty(prev => ({ ...prev, [k]: { role_key: role, permission_key: permKey, granted: next } }));
+    setMatrix((prev) => ({ ...prev, [k]: next }));
+    setDirty((prev) => ({ ...prev, [k]: { role_key: role, permission_key: permKey, granted: next } }));
   };
 
   const save = async () => {
@@ -446,9 +585,9 @@ function PermissionsTab() {
     try {
       await put('/admin/role-permissions', { permissions: changes });
       setDirty({});
-      toast.success(`${changes.length} permission${changes.length > 1 ? 's' : ''} updated`);
+      showToast(`${changes.length} permission${changes.length > 1 ? 's' : ''} updated`, 'success');
     } catch {
-      toast.error('Failed to save permissions');
+      showToast('Failed to save permissions', 'error');
     } finally {
       setSaving(false);
     }
@@ -463,8 +602,14 @@ function PermissionsTab() {
           {isSystemAdmin ? 'Toggle switches to grant or revoke permissions for each role.' : 'View which roles have access to each system feature.'}
         </Typography>
         {isSystemAdmin && Object.keys(dirty).length > 0 && (
-          <Button size="small" variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={saving}
-            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<SaveIcon />}
+            onClick={save}
+            disabled={saving}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}
+          >
             {saving ? 'Saving…' : `Save ${Object.keys(dirty).length} change${Object.keys(dirty).length > 1 ? 's' : ''}`}
           </Button>
         )}
@@ -474,12 +619,12 @@ function PermissionsTab() {
           <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
             <TableRow>
               <TableCell sx={{ fontWeight: 700, minWidth: 220 }}>PERMISSION</TableCell>
-              {ROLES_ORDER.map(role => (
+              {ROLES_ORDER.map((role) => (
                 <TableCell key={role} align="center" sx={{ fontWeight: 700, minWidth: 80 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: ROLE_COLOR[role] }} />
-                    <Typography sx={{ fontSize: '0.65rem', fontWeight: 800, color: ROLE_COLOR[role], letterSpacing: '0.02em' }}>
-                      {role.replace(/_/g, '​_')}
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: ROLE_COLORS[role] || '#888' }} />
+                    <Typography sx={{ fontSize: '0.65rem', fontWeight: 800, color: ROLE_COLORS[role] || '#888', letterSpacing: '0.02em' }}>
+                      {role.replace(/_/g, '\u200B_')}
                     </Typography>
                   </Box>
                 </TableCell>
@@ -487,7 +632,7 @@ function PermissionsTab() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {groups.map(group => [
+            {groups.map((group) => [
               <TableRow key={`g-${group}`}>
                 <TableCell colSpan={ROLES_ORDER.length + 1}
                   sx={{ bgcolor: alpha(theme.palette.primary.main, 0.03), py: 0.5, pl: 2 }}>
@@ -496,24 +641,28 @@ function PermissionsTab() {
                   </Typography>
                 </TableCell>
               </TableRow>,
-              ...PERM_META.filter(p => p.group === group).map(p => (
+              ...PERM_META.filter((p) => p.group === group).map((p) => (
                 <TableRow key={p.key} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
                   <TableCell sx={{ pl: 3 }}>
                     <Typography variant="body2">{p.label}</Typography>
                   </TableCell>
-                  {ROLES_ORDER.map(role => {
+                  {ROLES_ORDER.map((role) => {
                     const k = `${p.key}::${role}`;
                     const granted = Boolean(matrix[k]);
                     const changed = k in dirty;
                     return (
                       <TableCell key={role} align="center">
                         {isSystemAdmin ? (
-                          <Switch size="small" checked={granted} onChange={() => toggle(p.key, role)}
-                            sx={changed ? { '& .MuiSwitch-track': { bgcolor: '#f59e0b' } } : {}} />
+                          <Switch
+                            size="small"
+                            checked={granted}
+                            onChange={() => toggle(p.key, role)}
+                            sx={changed ? { '& .MuiSwitch-track': { bgcolor: '#f59e0b' } } : {}}
+                          />
+                        ) : granted ? (
+                          <CheckCircleIcon sx={{ fontSize: 18, color: ROLE_COLORS[role] || '#10b981' }} />
                         ) : (
-                          granted
-                            ? <CheckCircleIcon sx={{ fontSize: 18, color: ROLE_COLOR[role] }} />
-                            : <CancelIcon sx={{ fontSize: 16, color: alpha('#94a3b8', 0.4) }} />
+                          <CancelIcon sx={{ fontSize: 16, color: alpha('#94a3b8', 0.4) }} />
                         )}
                       </TableCell>
                     );
@@ -528,11 +677,9 @@ function PermissionsTab() {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   TAB 4 — System Settings
-═══════════════════════════════════════════════════════════════════════ */
+/* ── TAB 4 — System Settings ── */
 function SettingsTab() {
-  const [vals, setVals]   = useState({ ...DEFAULT_SETTINGS });
+  const [vals, setVals]       = useState({ ...DEFAULT_SETTINGS });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState('');
@@ -541,10 +688,10 @@ function SettingsTab() {
   useEffect(() => {
     setLoading(true);
     get('/admin/system-settings')
-      .then(r => {
+      .then((r) => {
         const m = {};
         (r.data || []).forEach(({ key, value }) => { m[key] = value; });
-        setVals(v => ({ ...v, ...m }));
+        setVals((v) => ({ ...v, ...m }));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -552,18 +699,20 @@ function SettingsTab() {
 
   const set = (key) => (e) => {
     const val = e.target.type === 'checkbox' ? e.target.checked : (e.target.type === 'number' ? Number(e.target.value) : e.target.value);
-    setVals(v => ({ ...v, [key]: val }));
+    setVals((v) => ({ ...v, [key]: val }));
   };
 
   const saveGroup = async (keys) => {
     setSaving(true); setSaved(''); setErr('');
     try {
-      await put('/admin/system-settings', { settings: keys.map(k => ({ key: k, value: vals[k] })) });
-      setSaved(keys.join(', ') + ' saved');
+      await put('/admin/system-settings', { settings: keys.map((k) => ({ key: k, value: vals[k] })) });
+      setSaved(`${keys.join(', ')} saved`);
       setTimeout(() => setSaved(''), 3000);
     } catch (ex) {
       setErr(ex.response?.data?.error || 'Save failed');
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>;
@@ -578,8 +727,14 @@ function SettingsTab() {
       </Stack>
       {children}
       <Box sx={{ mt: 2.5, pt: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
-        <Button size="small" variant="contained" startIcon={<SaveIcon />} onClick={() => saveGroup(keys)} disabled={saving}
-          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}>
+        <Button
+          size="small"
+          variant="contained"
+          startIcon={<SaveIcon />}
+          onClick={() => saveGroup(keys)}
+          disabled={saving}
+          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 1.5 }}
+        >
           {saving ? 'Saving…' : 'Save Changes'}
         </Button>
       </Box>
@@ -589,8 +744,14 @@ function SettingsTab() {
   const NumField = ({ label, k, min, max }) => (
     <Stack direction="row" justifyContent="space-between" alignItems="center" py={0.75}>
       <Typography variant="body2">{label}</Typography>
-      <TextField size="small" type="number" value={vals[k]} onChange={set(k)}
-        inputProps={{ min, max }} sx={{ width: 100, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }} />
+      <TextField
+        size="small"
+        type="number"
+        value={vals[k] ?? ''}
+        onChange={set(k)}
+        slotProps={{ htmlInput: { min, max } }}
+        sx={{ width: 100, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+      />
     </Stack>
   );
 
@@ -600,7 +761,7 @@ function SettingsTab() {
         <Typography variant="body2">{label}</Typography>
         {sub && <Typography variant="caption" color="text.secondary">{sub}</Typography>}
       </Box>
-      <Switch size="small" checked={Boolean(vals[k])} onChange={e => setVals(v => ({ ...v, [k]: e.target.checked }))} />
+      <Switch size="small" checked={Boolean(vals[k])} onChange={(e) => setVals((v) => ({ ...v, [k]: e.target.checked }))} />
     </Stack>
   );
 
@@ -638,9 +799,12 @@ function SettingsTab() {
             <Typography variant="body2">Roles allowed to access attachments</Typography>
             <Typography variant="caption" color="text.secondary">Comma-separated role keys</Typography>
           </Box>
-          <TextField size="small" value={Array.isArray(vals.file_access_allowed_roles) ? vals.file_access_allowed_roles.join(',') : vals.file_access_allowed_roles}
-            onChange={e => setVals(v => ({ ...v, file_access_allowed_roles: e.target.value.split(',').map(s => s.trim()) }))}
-            sx={{ width: 320, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }} />
+          <TextField
+            size="small"
+            value={Array.isArray(vals.file_access_allowed_roles) ? vals.file_access_allowed_roles.join(',') : vals.file_access_allowed_roles}
+            onChange={(e) => setVals((v) => ({ ...v, file_access_allowed_roles: e.target.value.split(',').map((s) => s.trim()) }))}
+            sx={{ width: 320, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+          />
         </Stack>
       </SettingGroup>
 
@@ -667,9 +831,7 @@ function SettingsTab() {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   MAIN — SecurityCenter
-═══════════════════════════════════════════════════════════════════════ */
+/* ── MAIN — SecurityCenter ── */
 export default function SecurityCenter() {
   const [tab, setTab] = useState(0);
 
@@ -683,20 +845,11 @@ export default function SecurityCenter() {
 
   return (
     <Box sx={{ width: '100%', pb: 4 }}>
-      {/* Header */}
-      <Stack direction="row" spacing={1.5} alignItems="center" mb={3}>
-        <Box sx={{ width: 42, height: 42, borderRadius: 1.5, bgcolor: alpha('#ef4444', 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <SecurityIcon sx={{ color: '#ef4444', fontSize: 22 }} />
-        </Box>
-        <Box>
-          <Typography variant="h5" fontWeight={700} sx={{ letterSpacing: '-0.02em' }}>
-            Administration & Security
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Sessions, audit trail, access control, roles, and system configuration
-          </Typography>
-        </Box>
-      </Stack>
+      <PageHeader
+        icon={<SecurityIcon />}
+        title="Administration & Security Center"
+        subtitle="Manage active sessions, audit trails, role permission matrix, and system configurations"
+      />
 
       {/* Tabs */}
       <Paper elevation={0} sx={{ mb: 3, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>

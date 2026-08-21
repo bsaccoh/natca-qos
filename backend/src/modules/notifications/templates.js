@@ -22,6 +22,9 @@ export function submissionSms({ complaintRef, status }) {
 
 export function statusUpdateSms({ complaintRef, status }) {
   const human = humanStatus[status] || status.toLowerCase();
+  if (status === 'RESOLVED' || status === 'CLOSED') {
+    return `${BRAND}: Complaint ${complaintRef} has been resolved by the operator. Please rate your experience: ${trackUrlFor(complaintRef)}`;
+  }
   return `${BRAND}: Complaint ${complaintRef} is now ${human}. Details: ${trackUrlFor(complaintRef)}`;
 }
 
@@ -76,15 +79,26 @@ export function submissionEmail({ complaintRef, status, citizenName }) {
 export function statusUpdateEmail({ complaintRef, status, citizenName }) {
   const greet = citizenName ? `Hi ${citizenName},` : 'Hello,';
   const human = humanStatus[status] || status.toLowerCase();
+
+  let intro = `${greet} your complaint ${complaintRef} is now <strong>${human}</strong>.`;
+  let cta = 'View details';
+  let title = 'Status update';
+
+  if (status === 'RESOLVED' || status === 'CLOSED') {
+    title = 'Ticket Resolved';
+    intro = `${greet} your complaint ${complaintRef} has been resolved by the operator. We value your feedback! Please click the link below to rate your experience and provide a review.`;
+    cta = 'Rate your experience';
+  }
+
   return {
     subject: `${BRAND} — Complaint ${complaintRef} is now ${status}`,
     html: emailShell({
-      title: 'Status update',
-      intro: `${greet} your complaint ${complaintRef} is now <strong>${human}</strong>.`,
+      title,
+      intro,
       ref: complaintRef,
       status,
-      cta: 'View details',
+      cta,
     }),
-    text: `${greet}\n\nYour complaint ${complaintRef} is now ${human}.\nDetails: ${trackUrlFor(complaintRef)}\n\n— ${BRAND}`,
+    text: `${greet}\n\n${intro.replace(/<[^>]*>?/gm, '')}\n${cta}: ${trackUrlFor(complaintRef)}\n\n— ${BRAND}`,
   };
 }

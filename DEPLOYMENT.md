@@ -59,6 +59,9 @@ This guide walks you through deploying the **NatCA CMS** project for free using 
    - `NODE_ENV` = `production`
    - `JWT_SECRET` = *(Generate any random 32+ character secret string)*
    - `FACE_MATCH_URL` = *(Your face match service URL from Step 2a, e.g., `https://natca-face-match.onrender.com`)*
+   - `CORS_ORIGINS` = `https://natca-admin.vercel.app,https://natca-citizen.vercel.app` *(Required: Add your Vercel frontend URLs to avoid CORS blocks)*
+   - *(Optional)* `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` = Email provider credentials
+   - *(Optional)* `AT_USERNAME`, `AT_API_KEY`, `AT_SENDER_ID` = Africa's Talking SMS credentials
 7. Click **Create Web Service**.
    - Render will build and run your backend.
    - Once live, copy your backend URL (e.g., `https://natca-cms-backend.onrender.com`).
@@ -92,6 +95,7 @@ This guide walks you through deploying the **NatCA CMS** project for free using 
    - **Output Directory**: `dist`
 3. Expand **Environment Variables** and add:
    - `VITE_API_URL` = `https://natca-cms-backend.onrender.com/api/v1` *(Replace with your Render backend URL)*
+   - `VITE_SOCKET_URL` = `https://natca-cms-backend.onrender.com` *(Replace with your Render backend URL)*
 4. Click **Deploy**.
 
 ---

@@ -11,16 +11,8 @@ import AddIcon           from '@mui/icons-material/Add';
 import SearchIcon        from '@mui/icons-material/Search';
 import { get }           from '../api/client.js';
 import { useAuth }       from '../auth/AuthContext.jsx';
-import { STATUS_COLOR }  from '../theme/theme.js';
-
-function timeSince(ts) {
-  if (!ts) return '—';
-  const s = Math.floor((Date.now() - new Date(ts)) / 1000);
-  if (s < 60)    return `${s}s ago`;
-  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return new Date(ts).toLocaleDateString();
-}
+import { BRAND, STATUS_COLOR, getOperatorColor } from '../theme/theme.js';
+import { timeSince, formatDate } from '../utils/formatters.js';
 
 const SEVERITY_COLOR = { LOW: 'default', MEDIUM: 'info', HIGH: 'warning', CRITICAL: 'error' };
 
@@ -37,6 +29,7 @@ export default function MyComplaints() {
   const [statusFilter, setStatusFilter] = useState('');
 
   const load = useCallback(async () => {
+    if (!user) return;
     setLoading(true); setErr('');
     try {
       const params = new URLSearchParams({
@@ -57,116 +50,122 @@ export default function MyComplaints() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={2} sx={{ mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight={700}>My Complaints</Typography>
+          <Typography variant="h4" fontWeight={800} sx={{ color: BRAND.navy, mb: 0.5 }}>My Complaints</Typography>
           <Typography variant="body2" color="text.secondary">
-            {total} complaint{total !== 1 ? 's' : ''} · Hello, {user?.fullName}
+            View history and track resolution progress for cases filed from your account
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1}>
-          <IconButton onClick={load} title="Refresh"><RefreshIcon /></IconButton>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/submit')}>
+        <Stack direction="row" spacing={1.5}>
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={load} size="small">
+            Refresh
+          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/submit')} sx={{ bgcolor: BRAND.primary }}>
             New Complaint
           </Button>
         </Stack>
       </Stack>
 
-      {/* Filters */}
-      <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel>Status</InputLabel>
-          <Select value={statusFilter} label="Status" onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}>
-            <MenuItem value="">All</MenuItem>
-            {['NEW','UNDER_REVIEW','ASSIGNED','ESCALATED','RESOLVED','CLOSED'].map((s) => (
-              <MenuItem key={s} value={s}>{s.replace(/_/g, ' ')}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Stack>
+      {err && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{err}</Alert>}
 
-      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+      <Paper elevation={0} sx={{ border: `1px solid ${BRAND.border}`, borderRadius: 2, overflow: 'hidden' }}>
+        <Box sx={{ p: 2, borderBottom: `1px solid ${BRAND.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            {total} Total Case{total === 1 ? '' : 's'}
+          </Typography>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel>Status Filter</InputLabel>
+            <Select value={statusFilter} label="Status Filter" onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}>
+              <MenuItem value="">All Statuses</MenuItem>
+              <MenuItem value="NEW">New / Submitted</MenuItem>
+              <MenuItem value="UNDER_REVIEW">Under Review</MenuItem>
+              <MenuItem value="ASSIGNED">Assigned to Operator</MenuItem>
+              <MenuItem value="ESCALATED">Escalated</MenuItem>
+              <MenuItem value="RESOLVED">Resolved</MenuItem>
+              <MenuItem value="CLOSED">Closed</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
 
-      <TableContainer component={Paper} elevation={0}>
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ bgcolor: 'action.hover' }}>
-              <TableCell>Reference</TableCell>
-              <TableCell>Issue</TableCell>
-              <TableCell>Operator</TableCell>
-              <TableCell>Severity</TableCell>
-              <TableCell>Submitted</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Action</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading && (
+        <TableContainer>
+          <Table size="small">
+            <TableHead sx={{ bgcolor: BRAND.alt }}>
               <TableRow>
-                <TableCell colSpan={7} align="center">
-                  <CircularProgress size={24} sx={{ my: 2 }} />
-                </TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Tracking ID</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Operator</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Issue Type</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Severity</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Submitted</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
               </TableRow>
-            )}
-            {!loading && rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} align="center">
-                  <Box sx={{ py: 5 }}>
-                    <Typography color="text.secondary" gutterBottom>No complaints yet</Typography>
-                    <Button variant="contained" size="small" onClick={() => navigate('/submit')}>
-                      File your first complaint
-                    </Button>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            )}
-            {rows.map((c) => (
-              <TableRow key={c.complaint_id} hover>
-                <TableCell>
-                  <Typography variant="caption" fontFamily="monospace">{c.complaint_ref}</Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" fontWeight={600}>{c.issue_type?.replace(/_/g, ' ')}</Typography>
-                  {c.category_name && <Typography variant="caption" color="text.secondary">{c.category_name}</Typography>}
-                </TableCell>
-                <TableCell>{c.operator_name || '—'}</TableCell>
-                <TableCell>
-                  <Chip size="small" label={c.severity}
-                    color={SEVERITY_COLOR[c.severity] || 'default'} variant="outlined"
-                    sx={{ fontSize: '0.68rem' }} />
-                </TableCell>
-                <TableCell>
-                  <Tooltip title={new Date(c.created_at).toLocaleString()}>
-                    <Typography variant="caption">{timeSince(c.created_at)}</Typography>
-                  </Tooltip>
-                </TableCell>
-                <TableCell>
-                  <Chip size="small"
-                    label={c.status?.replace(/_/g, ' ')}
-                    color={STATUS_COLOR[c.status] || 'default'}
-                    variant={c.status === 'NEW' ? 'filled' : 'outlined'}
-                    sx={{ fontSize: '0.68rem' }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <IconButton size="small" onClick={() => navigate(`/track?ref=${c.complaint_ref}`)} title="Track">
-                    <SearchIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <CircularProgress size={32} />
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                    No complaints found.
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && rows.map((c) => (
+                <TableRow key={c.complaint_id} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
+                  <TableCell sx={{ fontFamily: 'monospace', fontWeight: 700, color: 'primary.main' }}>
+                    {c.reference_number || `#${c.complaint_id}`}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={c.operator_name || 'N/A'}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: '0.72rem',
+                        bgcolor: `${getOperatorColor(c.operator_name)}15`,
+                        color: getOperatorColor(c.operator_name),
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell>{c.issue_type?.replace(/_/g, ' ') || 'General'}</TableCell>
+                  <TableCell>
+                    <Chip size="small" label={c.severity || 'LOW'} color={SEVERITY_COLOR[c.severity] || 'default'} />
+                  </TableCell>
+                  <TableCell>
+                    <Chip size="small" label={c.status?.replace(/_/g, ' ')} color={STATUS_COLOR[c.status] || 'default'} />
+                  </TableCell>
+                  <TableCell title={formatDate(c.created_at, 'time')}>
+                    {timeSince(c.created_at)}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title="Track Details">
+                      <IconButton size="small" onClick={() => navigate(`/track?ref=${encodeURIComponent(c.reference_number || c.complaint_id)}`)}>
+                        <SearchIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
         <TablePagination
           component="div"
           count={total}
           page={page}
-          onPageChange={(_, p) => setPage(p)}
+          onPageChange={(_, newPage) => setPage(newPage)}
           rowsPerPage={rowsPerPage}
           onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
           rowsPerPageOptions={[5, 10, 25]}
         />
-      </TableContainer>
+      </Paper>
     </Container>
   );
 }

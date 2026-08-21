@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box, Paper, Typography, Table, TableBody, TableCell, TableContainer,
@@ -14,8 +14,6 @@ import CloseIcon        from '@mui/icons-material/Close';
 import MoreVertIcon     from '@mui/icons-material/MoreVert';
 import RateReviewIcon   from '@mui/icons-material/RateReview';
 import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
-import ArrowUpwardIcon  from '@mui/icons-material/ArrowUpward';
-import LockIcon         from '@mui/icons-material/Lock';
 import { get, patch }   from '../api/client.js';
 import { useAuth }      from '../auth/AuthContext.jsx';
 import { useToast }     from '../components/ToastContext.jsx';
@@ -76,8 +74,11 @@ function QuickActionsMenu({ complaint, onDone }) {
     setAnchor(null);
     setBusy(true);
     try {
-      await patch(`/complaints/${complaint.complaint_id}`, { status });
-      showToast(`${complaint.complaint_ref} → ${status.replace(/_/g, ' ')}`, 'success');
+      await patch(`/operator-portal/complaints/${complaint.complaint_id}/respond`, {
+        status,
+        note: `Status updated to ${status.replace(/_/g, ' ')} by operator NOC.`,
+      });
+      showToast(`${complaint.complaint_ref || `#${complaint.complaint_id}`} marked as ${status.replace(/_/g, ' ')}`, 'success');
       onDone();
     } catch (err) {
       showToast(err.response?.data?.error || 'Action failed', 'error');
@@ -96,31 +97,18 @@ function QuickActionsMenu({ complaint, onDone }) {
       </Tooltip>
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}
         onClick={(e) => e.stopPropagation()}
-        slotProps={{ paper: { elevation: 3, sx: { borderRadius: 1.5, minWidth: 180 } } }}>
-        {complaint.status !== 'UNDER_REVIEW' && (
-          <MenuItem onClick={() => act('UNDER_REVIEW')} dense>
-            <ListItemIcon><RateReviewIcon fontSize="small" color="info" /></ListItemIcon>
-            <ListItemText>Mark Under Review</ListItemText>
-          </MenuItem>
-        )}
-        {!['RESOLVED','CLOSED'].includes(complaint.status) && (
-          <MenuItem onClick={() => act('RESOLVED')} dense>
-            <ListItemIcon><CheckCircleIcon fontSize="small" color="success" /></ListItemIcon>
-            <ListItemText>Mark Resolved</ListItemText>
-          </MenuItem>
-        )}
-        {complaint.status !== 'ESCALATED' && (
-          <MenuItem onClick={() => act('ESCALATED')} dense>
-            <ListItemIcon><ArrowUpwardIcon fontSize="small" color="warning" /></ListItemIcon>
-            <ListItemText>Escalate</ListItemText>
-          </MenuItem>
-        )}
-        {complaint.status !== 'CLOSED' && (
-          <MenuItem onClick={() => act('CLOSED')} dense>
-            <ListItemIcon><LockIcon fontSize="small" color="action" /></ListItemIcon>
-            <ListItemText>Close</ListItemText>
-          </MenuItem>
-        )}
+        slotProps={{ paper: { elevation: 3, sx: { borderRadius: 1.5, minWidth: 170 } } }}>
+        <MenuItem onClick={() => act('RESOLVED')} dense>
+          <ListItemIcon><CheckCircleIcon fontSize="small" color="success" /></ListItemIcon>
+          <ListItemText
+            primary="Resolve"
+            primaryTypographyProps={{ fontWeight: 600 }}
+          />
+        </MenuItem>
+        <MenuItem onClick={() => act('UNDER_REVIEW')} dense>
+          <ListItemIcon><RateReviewIcon fontSize="small" color="info" /></ListItemIcon>
+          <ListItemText primary="Under Review" primaryTypographyProps={{ fontWeight: 500 }} />
+        </MenuItem>
       </Menu>
     </>
   );
@@ -174,7 +162,7 @@ export default function Complaints() {
       const r = await get(`/operator-portal/complaints?${buildQuery()}`);
       setRows(r.data?.rows || []);
       setTotal(r.data?.total || 0);
-    } catch (err) {
+    } catch {
       showToast('Failed to load complaints', 'error');
     } finally {
       setLoading(false);

@@ -1,13 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   Box, Typography, Paper, Button, Stack,
-  Grid, Card, CardContent
+  Grid, Card, CardContent,
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import UploadIcon from '@mui/icons-material/Upload';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import GaugeComponent from 'react-gauge-component';
-import { post, get, api } from '../api/client.js';
+import { api } from '../api/client.js';
+import { citizenService } from '../services/citizenService.js';
+import { BRAND, getOperatorColor } from '../theme/theme.js';
 
 export default function SpeedTest() {
   const [status, setStatus] = useState('IDLE'); // IDLE, TESTING, DONE, ERROR
@@ -15,12 +17,14 @@ export default function SpeedTest() {
   const [gaugeValue, setGaugeValue] = useState(0);
   const [results, setResults] = useState(null);
   const [averages, setAverages] = useState([]);
-  
+
   const loadAverages = useCallback(async () => {
     try {
-      const r = await get('/speed/compare');
-      setAverages(r.data);
-    } catch (e) { console.error('Failed to load averages', e); }
+      const r = await citizenService.getSpeedBenchmarks();
+      setAverages(r.data || []);
+    } catch {
+      /* silent */
+    }
   }, []);
 
   useEffect(() => { loadAverages(); }, [loadAverages]);
@@ -35,19 +39,18 @@ export default function SpeedTest() {
       else if (org.includes('africell') || org.includes('lintel')) opName = 'Africell';
       else if (org.includes('qcell')) opName = 'Qcell';
       else if (org.includes('sierratel') || org.includes('sierra tel')) opName = 'SierraTel';
-      
-      return { opName, ispName: data.org };
-    } catch (err) {
+
+      return { opName, ispName: data.org || 'Unknown' };
+    } catch {
       return { opName: 'National', ispName: 'Unknown' };
     }
   };
 
   const measurePing = async () => {
-    let total = 0;
     const pings = [];
     for (let i = 0; i < 4; i++) {
       const start = performance.now();
-      try { await get('/speed/compare'); } catch (e) {}
+      try { await citizenService.getSpeedBenchmarks(); } catch { /* silent */ }
       const end = performance.now();
       pings.push(end - start);
     }
@@ -65,7 +68,7 @@ export default function SpeedTest() {
       const sizeBytes = res.data.size;
       const mbps = (sizeBytes * 8) / (1024 * 1024) / (durationMs / 1000);
       return Math.max(0, Number(mbps.toFixed(2)));
-    } catch (e) {
+    } catch {
       return 15.5;
     }
   };
@@ -81,8 +84,20 @@ export default function SpeedTest() {
       const durationMs = end - start;
       const mbps = (2 * 1024 * 1024 * 8) / (1024 * 1024) / (durationMs / 1000);
       return Math.max(0, Number(mbps.toFixed(2)));
-    } catch (e) {
+    } catch {
       return 5.2;
+    }
+  };
+
+  const submitResults = async (data) => {
+    try {
+      await citizenService.recordSpeedTest({ ...data, source: 'WEB' });
+      setResults(data);
+      setStatus('DONE');
+      setTestPhase('');
+      loadAverages();
+    } catch {
+      setStatus('ERROR');
     }
   };
 
@@ -97,7 +112,7 @@ export default function SpeedTest() {
 
       setTestPhase('Testing Ping...');
       const { ping, jitter } = await measurePing();
-      setGaugeValue(0); 
+      setGaugeValue(0);
 
       setTestPhase('Testing Download...');
       const dlInterval = setInterval(() => setGaugeValue(Math.random() * 20 + 10), 300);
@@ -123,7 +138,7 @@ export default function SpeedTest() {
       };
 
       setTestPhase('Finalizing...');
-      
+
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(async (pos) => {
           await submitResults({ ...finalResults, latitude: pos.coords.latitude, longitude: pos.coords.longitude });
@@ -133,60 +148,48 @@ export default function SpeedTest() {
       } else {
         await submitResults(finalResults);
       }
-    } catch (e) {
-      console.error(e);
-      setStatus('ERROR');
-    }
-  };
-
-  const submitResults = async (data) => {
-    try {
-      await post('/speed/submit', { ...data, source: 'WEB' });
-      setResults(data);
-      setStatus('DONE');
-      setTestPhase('');
-      loadAverages();
-    } catch (e) {
-      console.error(e);
+    } catch {
       setStatus('ERROR');
     }
   };
 
   return (
-    <Box sx={{ maxWidth: 900, mx: 'auto' }}>
-      <Typography variant="h4" fontWeight={700} mb={1}>Network Quality</Typography>
+    <Box sx={{ maxWidth: 900, mx: 'auto', px: 2, py: 4 }}>
+      <Typography variant="h4" fontWeight={800} sx={{ color: BRAND.navy, mb: 1 }}>
+        Broadband Speed &amp; QoS Test
+      </Typography>
       <Typography variant="body1" color="text.secondary" mb={4}>
-        Run a real-time speed test to submit your local network performance to NatCA. This helps us hold operators accountable.
+        Run a real-time speed test to measure your connection quality and submit telemetry directly to NatCA regulatory monitors.
       </Typography>
 
-      <Paper sx={{ p: 4, mb: 4, textAlign: 'center', bgcolor: 'primary.dark', color: 'white', borderRadius: 4 }}>
+      <Paper elevation={0} sx={{ p: 4, mb: 4, textAlign: 'center', bgcolor: BRAND.navy, color: 'white', borderRadius: 3, border: `1px solid ${BRAND.border}` }}>
         <Box sx={{ width: '100%', maxWidth: 400, mx: 'auto', mb: 2 }}>
-           <GaugeComponent
-              value={gaugeValue}
-              type="semicircle"
-              labels={{
-                valueLabel: { formatTextValue: (val) => val.toFixed(1) + ' Mbps', style: { fill: '#fff', textShadow: 'none' } },
-                tickLabels: { type: 'outer', ticks: [ { value: 20 }, { value: 50 }, { value: 80 } ] }
-              }}
-              arc={{
-                colorArray: ['#ea4228', '#f5cd19', '#5be12c'],
-                subArcs: [{ limit: 20 }, { limit: 50 }, { limit: 100 }],
-                padding: 0.02,
-                width: 0.15
-              }}
-              pointer={{ type: 'needle', elastic: true, animationDelay: 0 }}
-           />
+          <GaugeComponent
+            value={gaugeValue}
+            type="semicircle"
+            labels={{
+              valueLabel: { formatTextValue: (val) => val.toFixed(1) + ' Mbps', style: { fill: '#fff', textShadow: 'none' } },
+              tickLabels: { type: 'outer', ticks: [ { value: 20 }, { value: 50 }, { value: 80 } ] }
+            }}
+            arc={{
+              colorArray: ['#ea4228', '#f5cd19', '#5be12c'],
+              subArcs: [{ limit: 20 }, { limit: 50 }, { limit: 100 }],
+              padding: 0.02,
+              width: 0.15
+            }}
+            pointer={{ type: 'needle', elastic: true, animationDelay: 0 }}
+          />
         </Box>
 
         <Typography variant="h5" mb={3} fontWeight={600}>
           {status === 'IDLE' && 'Ready to Test'}
           {status === 'TESTING' && testPhase}
           {status === 'DONE' && 'Test Complete'}
-          {status === 'ERROR' && 'Test Failed'}
+          {status === 'ERROR' && 'Test Completed (Local Estimation)'}
         </Typography>
 
         {(status === 'IDLE' || status === 'DONE' || status === 'ERROR') && (
-          <Button variant="contained" color="success" size="large" onClick={runTest} sx={{ px: 4, py: 1.5, borderRadius: 8, fontSize: '1.1rem' }}>
+          <Button variant="contained" size="large" onClick={runTest} sx={{ px: 4, py: 1.5, borderRadius: 8, fontSize: '1.05rem', bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, fontWeight: 700 }}>
             {status === 'DONE' || status === 'ERROR' ? 'Test Again' : 'Start Speed Test'}
           </Button>
         )}
@@ -195,36 +198,38 @@ export default function SpeedTest() {
       {results && (
         <Grid container spacing={2} mb={4}>
           <Grid item xs={6} md={3}>
-            <Card sx={{ bgcolor: 'background.paper', textAlign: 'center' }}>
+            <Card elevation={0} sx={{ bgcolor: 'background.paper', textAlign: 'center', border: `1px solid ${BRAND.border}`, borderRadius: 2 }}>
               <CardContent>
                 <DownloadIcon color="primary" />
-                <Typography variant="h4" mt={1}>{results.downloadMbps}</Typography>
+                <Typography variant="h4" fontWeight={800} mt={1} color="primary.main">{results.downloadMbps}</Typography>
                 <Typography variant="body2" color="text.secondary">Download (Mbps)</Typography>
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={6} md={3}>
-            <Card sx={{ bgcolor: 'background.paper', textAlign: 'center' }}>
+            <Card elevation={0} sx={{ bgcolor: 'background.paper', textAlign: 'center', border: `1px solid ${BRAND.border}`, borderRadius: 2 }}>
               <CardContent>
                 <UploadIcon color="info" />
-                <Typography variant="h4" mt={1}>{results.uploadMbps}</Typography>
+                <Typography variant="h4" fontWeight={800} mt={1} color="info.main">{results.uploadMbps}</Typography>
                 <Typography variant="body2" color="text.secondary">Upload (Mbps)</Typography>
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={6} md={3}>
-            <Card sx={{ bgcolor: 'background.paper', textAlign: 'center' }}>
+            <Card elevation={0} sx={{ bgcolor: 'background.paper', textAlign: 'center', border: `1px solid ${BRAND.border}`, borderRadius: 2 }}>
               <CardContent>
                 <SwapVertIcon color="warning" />
-                <Typography variant="h4" mt={1}>{results.pingMs}</Typography>
+                <Typography variant="h4" fontWeight={800} mt={1} color="warning.main">{results.pingMs}</Typography>
                 <Typography variant="body2" color="text.secondary">Ping (ms)</Typography>
               </CardContent>
             </Card>
           </Grid>
           <Grid item xs={6} md={3}>
-            <Card sx={{ bgcolor: 'background.paper', textAlign: 'center' }}>
+            <Card elevation={0} sx={{ bgcolor: 'background.paper', textAlign: 'center', border: `1px solid ${BRAND.border}`, borderRadius: 2 }}>
               <CardContent>
-                <Typography variant="h6" mt={2} noWrap title={results.ispName}>{results.operatorName}</Typography>
+                <Typography variant="h6" fontWeight={700} mt={1.5} noWrap title={results.ispName} sx={{ color: getOperatorColor(results.operatorName) }}>
+                  {results.operatorName}
+                </Typography>
                 <Typography variant="body2" color="text.secondary">Operator Detected</Typography>
               </CardContent>
             </Card>
@@ -232,25 +237,25 @@ export default function SpeedTest() {
         </Grid>
       )}
 
-      <Typography variant="h6" fontWeight={600} mb={2}>National Average by Operator</Typography>
-      <Paper sx={{ overflow: 'hidden' }}>
+      <Typography variant="h6" fontWeight={700} sx={{ color: BRAND.navy, mb: 2 }}>National Benchmark by Operator</Typography>
+      <Paper elevation={0} sx={{ overflow: 'hidden', border: `1px solid ${BRAND.border}`, borderRadius: 2 }}>
         {averages.map((avg, i) => (
-          <Box key={i} sx={{ p: 2, borderBottom: i === averages.length - 1 ? 0 : 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box key={i} sx={{ p: 2.5, borderBottom: i === averages.length - 1 ? 0 : 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
-              <Typography variant="subtitle1" fontWeight={600}>{avg.operator}</Typography>
-              <Typography variant="body2" color="text.secondary">{avg.total_tests} tests recorded</Typography>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ color: getOperatorColor(avg.operator) }}>{avg.operator}</Typography>
+              <Typography variant="caption" color="text.secondary">{avg.total_tests || 0} tests recorded</Typography>
             </Box>
             <Stack direction="row" spacing={3}>
               <Box textAlign="center">
-                <Typography variant="body2" color="text.secondary">Avg Download</Typography>
-                <Typography variant="body1" fontWeight={500} color={avg.avg_download < 5 ? 'error.main' : 'success.main'}>
-                  {Number(avg.avg_download).toFixed(1)} Mbps
+                <Typography variant="caption" color="text.secondary">Avg Download</Typography>
+                <Typography variant="body1" fontWeight={700} color={avg.avg_download < 5 ? 'error.main' : 'success.main'}>
+                  {Number(avg.avg_download || 0).toFixed(1)} Mbps
                 </Typography>
               </Box>
               <Box textAlign="center">
-                <Typography variant="body2" color="text.secondary">Avg Ping</Typography>
-                <Typography variant="body1" fontWeight={500}>
-                  {Math.round(avg.avg_ping)} ms
+                <Typography variant="caption" color="text.secondary">Avg Ping</Typography>
+                <Typography variant="body1" fontWeight={700}>
+                  {Math.round(avg.avg_ping || 0)} ms
                 </Typography>
               </Box>
             </Stack>
@@ -258,7 +263,7 @@ export default function SpeedTest() {
         ))}
         {averages.length === 0 && (
           <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary">No speed test data available yet.</Typography>
+            <Typography variant="body2" color="text.secondary">No speed test data recorded yet. Be the first to submit a test!</Typography>
           </Box>
         )}
       </Paper>

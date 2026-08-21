@@ -3,7 +3,7 @@ import { useNavigate, Link }   from 'react-router-dom';
 import {
   Box, Button, Container, Paper, Stack, Stepper, Step, StepLabel,
   Typography, Alert, AlertTitle, CircularProgress, TextField, MenuItem,
-  FormControl, InputLabel, Select, Divider, Chip, Snackbar, Slide,
+  FormControl, InputLabel, Select, Divider, Chip, Snackbar,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
@@ -527,7 +527,6 @@ export default function SubmitComplaint() {
   // Resolve which logical step index maps to which step name, accounting for the extra guest step
   const STEP_CATEGORY = 0;
   const STEP_DETAILS  = 1;
-  const STEP_LOCATION = 2;
   const STEP_CONTACT  = isGuest ? 3 : -1;
   const STEP_REVIEW   = isGuest ? 4 : 3;
 
