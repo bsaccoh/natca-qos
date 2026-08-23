@@ -458,11 +458,11 @@ export default function Kyc() {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5 }}>
                   <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>Front View</Typography>
-                    <DocImage src={getBackendFileUrl(selected.id_front_path)} alt="ID Front" />
+                    <DocImage src={selected.id_front_data || getBackendFileUrl(selected.id_front_path)} alt="ID Front" />
                   </Paper>
                   <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>Back View</Typography>
-                    <DocImage src={getBackendFileUrl(selected.id_back_path)} alt="ID Back" />
+                    <DocImage src={selected.id_back_data || getBackendFileUrl(selected.id_back_path)} alt="ID Back" />
                   </Paper>
                 </Box>
               </Stack>
@@ -474,10 +474,10 @@ export default function Kyc() {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1.5fr' }, gap: 3, alignItems: 'center' }}>
                   <Paper sx={{ p: 2.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1.5}>Citizen Selfie</Typography>
-                    {selected.face_image_path ? (
+                    {(selected.face_image_data || selected.face_image_path) ? (
                       <Box
                         component="img"
-                        src={getBackendFileUrl(selected.face_image_path)}
+                        src={selected.face_image_data || getBackendFileUrl(selected.face_image_path)}
                         alt="Selfie"
                         sx={{ width: 140, height: 140, borderRadius: '50%', objectFit: 'cover', border: '3px solid #2563eb', mx: 'auto', display: 'block' }}
                       />

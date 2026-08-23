@@ -372,3 +372,6 @@ ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_name  VARCHAR(150);
 ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(30);
 ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_email VARCHAR(200);
 ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS id_expiry_date DATE;
+ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS id_front_data  TEXT;
+ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS id_back_data   TEXT;
+ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS face_image_data TEXT;

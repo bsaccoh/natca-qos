@@ -274,6 +274,7 @@ class _KycRegistrationScreenState extends State<KycRegistrationScreen> with Sing
         'dateOfBirth': _dobController.text.trim(),
         'address': _addressController.text.trim(),
         'phone': widget.phoneNumber,
+        'idType': 'NATIONAL_ID',
         if (_faceMatchScore != null) 'faceMatchScore': _faceMatchScore!.toStringAsFixed(1),
       };
 

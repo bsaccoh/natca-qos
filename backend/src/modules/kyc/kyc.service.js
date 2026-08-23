@@ -14,6 +14,7 @@ export async function submitKyc({
   firstName, lastName, dateOfBirth, sex, nationality, address,
   districtId, chiefdomId, idType, idExpiryDate,
   idFrontPath, idBackPath, faceImagePath,
+  idFrontData, idBackData, faceImageData,
   faceMatchScore,
   source,
 }) {
@@ -27,12 +28,14 @@ export async function submitKyc({
        first_name, last_name, date_of_birth, sex, nationality, address,
        district_id, chiefdom_id, id_type, id_expiry_date,
        id_front_path, id_back_path, face_image_path,
+       id_front_data, id_back_data, face_image_data,
        face_match_score
      ) VALUES (
        :ref, :userId, :phone, :operatorId, :iccid, :nin,
        :firstName, :lastName, :dateOfBirth, :sex, :nationality, :address,
        :districtId, :chiefdomId, :idType, :idExpiryDate,
        :idFrontPath, :idBackPath, :faceImagePath,
+       :idFrontData, :idBackData, :faceImageData,
        :faceMatchScore
      ) RETURNING kyc_id, kyc_reference, status, created_at`,
     {
@@ -45,6 +48,8 @@ export async function submitKyc({
       idType: idType || null, idExpiryDate: idExpiryDate || null,
       idFrontPath: idFrontPath || null, idBackPath: idBackPath || null,
       faceImagePath: faceImagePath || null,
+      idFrontData: idFrontData || null, idBackData: idBackData || null,
+      faceImageData: faceImageData || null,
       faceMatchScore: faceMatchScore ?? null,
     }
   );
