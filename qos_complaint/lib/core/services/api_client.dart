@@ -1,8 +1,15 @@
 import 'dart:convert';
-import 'dart:io' show File;
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:shared_preferences/shared_preferences.dart';
+
+class XFileBytes {
+  final XFile file;
+  final Uint8List bytes;
+  XFileBytes(this.file, this.bytes);
+}
 
 // 10.0.2.2 = Android emulator loopback to host localhost
 // localhost = web / Windows desktop
@@ -146,17 +153,23 @@ class ApiClient {
     return res;
   }
 
-  Future<http.StreamedResponse> postMultipart(
+  Future<http.StreamedResponse> postMultipartBytes(
     String path,
     Map<String, String> fields,
-    List<MapEntry<String, File>> files,
+    List<MapEntry<String, XFileBytes>> files,
   ) async {
     final token = await _getAccessToken();
     final request = http.MultipartRequest('POST', Uri.parse('$_kBaseUrl$path'));
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     request.fields.addAll(fields);
     for (final entry in files) {
-      request.files.add(await http.MultipartFile.fromPath(entry.key, entry.value.path));
+      final xfb = entry.value;
+      final ext = xfb.file.name.contains('.') ? xfb.file.name.split('.').last : 'jpg';
+      request.files.add(http.MultipartFile.fromBytes(
+        entry.key,
+        xfb.bytes,
+        filename: xfb.file.name.isNotEmpty ? xfb.file.name : '${entry.key}.$ext',
+      ));
     }
     return request.send().timeout(const Duration(seconds: 30));
   }

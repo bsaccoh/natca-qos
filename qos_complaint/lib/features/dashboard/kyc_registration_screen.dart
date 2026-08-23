@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:camera/camera.dart';
@@ -36,13 +36,16 @@ class _KycRegistrationScreenState extends State<KycRegistrationScreen> with Sing
   // Step 2: ID Upload
   bool _idFrontUploaded = false;
   bool _idBackUploaded = false;
-  File? _idFrontFile;
-  File? _idBackFile;
+  XFile? _idFrontFile;
+  XFile? _idBackFile;
+  Uint8List? _idFrontBytes;
+  Uint8List? _idBackBytes;
 
   // Step 3: Face Scan
   bool _faceScanComplete = false;
   bool _isScanning = false;
-  File? _faceFile;
+  XFile? _faceFile;
+  Uint8List? _faceBytes;
   CameraController? _cameraController;
   late AnimationController _scanAnimationController;
   bool _isCameraInitialized = false;
@@ -151,12 +154,15 @@ class _KycRegistrationScreenState extends State<KycRegistrationScreen> with Sing
       imageQuality: 85,
     );
     if (picked != null && mounted) {
+      final bytes = await picked.readAsBytes();
       setState(() {
         if (isFront) {
-          _idFrontFile = File(picked.path);
+          _idFrontFile = picked;
+          _idFrontBytes = bytes;
           _idFrontUploaded = true;
         } else {
-          _idBackFile = File(picked.path);
+          _idBackFile = picked;
+          _idBackBytes = bytes;
           _idBackUploaded = true;
         }
       });
@@ -179,16 +185,19 @@ class _KycRegistrationScreenState extends State<KycRegistrationScreen> with Sing
 
     try {
       final xFile = await _cameraController!.takePicture();
-      final selfieFile = File(xFile.path);
+      final selfieBytes = await xFile.readAsBytes();
 
-      setState(() => _faceFile = selfieFile);
+      setState(() {
+        _faceFile = xFile;
+        _faceBytes = selfieBytes;
+      });
 
-      final res = await apiClient.postMultipart(
+      final res = await apiClient.postMultipartBytes(
         '/kyc/compare-faces',
         <String, String>{},
         [
-          MapEntry('id_front', _idFrontFile!),
-          MapEntry('selfie', selfieFile),
+          MapEntry('id_front', XFileBytes(_idFrontFile!, _idFrontBytes!)),
+          MapEntry('selfie', XFileBytes(xFile, selfieBytes)),
         ],
       );
 
@@ -268,12 +277,18 @@ class _KycRegistrationScreenState extends State<KycRegistrationScreen> with Sing
         if (_faceMatchScore != null) 'faceMatchScore': _faceMatchScore!.toStringAsFixed(1),
       };
 
-      final files = <MapEntry<String, File>>[];
-      if (_idFrontFile != null) files.add(MapEntry('id_front', _idFrontFile!));
-      if (_idBackFile != null) files.add(MapEntry('id_back', _idBackFile!));
-      if (_faceFile != null) files.add(MapEntry('face', _faceFile!));
+      final files = <MapEntry<String, XFileBytes>>[];
+      if (_idFrontFile != null && _idFrontBytes != null) {
+        files.add(MapEntry('id_front', XFileBytes(_idFrontFile!, _idFrontBytes!)));
+      }
+      if (_idBackFile != null && _idBackBytes != null) {
+        files.add(MapEntry('id_back', XFileBytes(_idBackFile!, _idBackBytes!)));
+      }
+      if (_faceFile != null && _faceBytes != null) {
+        files.add(MapEntry('face', XFileBytes(_faceFile!, _faceBytes!)));
+      }
 
-      final res = await apiClient.postMultipart('/kyc/submit', fields, files);
+      final res = await apiClient.postMultipartBytes('/kyc/submit', fields, files);
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final body = await res.stream.bytesToString();
@@ -434,9 +449,9 @@ class _KycRegistrationScreenState extends State<KycRegistrationScreen> with Sing
               children: [
                 const Text("Please upload clear photos of your National ID Card.", style: TextStyle(color: AppColors.textSecondary)),
                 const SizedBox(height: 16),
-                _buildIdUploadCard("Front of ID", _idFrontUploaded, _idFrontFile, () => _pickIdImage(true)),
+                _buildIdUploadCard("Front of ID", _idFrontUploaded, _idFrontBytes, () => _pickIdImage(true)),
                 const SizedBox(height: 12),
-                _buildIdUploadCard("Back of ID", _idBackUploaded, _idBackFile, () => _pickIdImage(false)),
+                _buildIdUploadCard("Back of ID", _idBackUploaded, _idBackBytes, () => _pickIdImage(false)),
               ],
             ),
           ),
@@ -483,7 +498,7 @@ class _KycRegistrationScreenState extends State<KycRegistrationScreen> with Sing
     );
   }
 
-  Widget _buildIdUploadCard(String title, bool isUploaded, File? file, VoidCallback onTap) {
+  Widget _buildIdUploadCard(String title, bool isUploaded, Uint8List? bytes, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -494,13 +509,13 @@ class _KycRegistrationScreenState extends State<KycRegistrationScreen> with Sing
           border: Border.all(color: isUploaded ? AppColors.successGreen : AppColors.dynamicBorder, style: isUploaded ? BorderStyle.solid : BorderStyle.none),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: isUploaded && file != null
+        child: isUploaded && bytes != null
             ? Row(
                 children: [
                   const SizedBox(width: 12),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(file, width: 80, height: 96, fit: BoxFit.cover),
+                    child: Image.memory(bytes, width: 80, height: 96, fit: BoxFit.cover),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
