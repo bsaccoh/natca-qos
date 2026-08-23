@@ -358,9 +358,9 @@ export default function Layout() {
       )}
 
       <Box component="main" sx={{
-        flexGrow: 1, p: { xs: 2, md: 3.5 }, mt: 8,
+        flexGrow: 1, px: { xs: 1, md: 1.5 }, py: { xs: 1.5, md: 2 }, mt: 8,
         minHeight: '100vh', transition: 'margin 225ms',
-        bgcolor: 'background.default',
+        bgcolor: 'background.default', overflow: 'hidden',
       }}>
         <Outlet />
       </Box>

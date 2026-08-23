@@ -60,6 +60,7 @@ class DraftReport {
   final String operatorName;
   final String description;
   final String district;
+  final int? districtId;
   final String areaDetail;
   final double lat;
   final double lng;
@@ -82,6 +83,7 @@ class DraftReport {
     this.operatorName = "Africell",
     this.description = "",
     this.district = "Kenema District",
+    this.districtId,
     this.areaDetail = "12 Bockarie Gbay Street",
     this.lat = 8.1189,
     this.lng = -11.1963,
@@ -105,6 +107,8 @@ class DraftReport {
     String? operatorName,
     String? description,
     String? district,
+    int? districtId,
+    bool clearDistrictId = false,
     String? areaDetail,
     double? lat,
     double? lng,
@@ -124,6 +128,7 @@ class DraftReport {
       operatorName: operatorName ?? this.operatorName,
       description: description ?? this.description,
       district: district ?? this.district,
+      districtId: clearDistrictId ? null : (districtId ?? this.districtId),
       areaDetail: areaDetail ?? this.areaDetail,
       lat: lat ?? this.lat,
       lng: lng ?? this.lng,
@@ -146,8 +151,10 @@ class DraftReportNotifier extends StateNotifier<DraftReport> {
   void updateIssueType(String val) => state = state.copyWith(issueType: val);
   void updateOperator(int id, String name) => state = state.copyWith(operatorId: id, operatorName: name);
   void updateDescription(String val) => state = state.copyWith(description: val);
-  void updateLocation(String street, String city, double lat, double lng) => 
+  void updateLocation(String street, String city, double lat, double lng) =>
       state = state.copyWith(areaDetail: street, district: city, lat: lat, lng: lng);
+  void updateDistrict(int id, String name) =>
+      state = state.copyWith(districtId: id, district: name);
   void addAttachment(String path) => state = state.copyWith(attachments: [...state.attachments, path]);
   void clearAttachments() => state = state.copyWith(attachments: const []);
   // Billing & Mobile Money setters
@@ -284,7 +291,7 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
     state = [newItem, ...state];
 
     try {
-      final districtId = _districtIdFromName(draft.district);
+      final districtId = draft.districtId ?? _districtIdFromName(draft.district);
       final body = <String, dynamic>{
         'operatorId': draft.operatorId,
         'issueType': draft.issueType,

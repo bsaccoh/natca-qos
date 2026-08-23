@@ -334,6 +334,150 @@ export async function getOperatorCompliance() {
   }));
 }
 
+// ── QoE / Network Diagnostics Analytics ──────────────────────────────────────
+
+export async function getQoeHeatmap() {
+  return query(`
+    SELECT c.complaint_id, c.complaint_ref, c.latitude, c.longitude,
+           c.issue_type, c.status, c.created_at,
+           COALESCE(o.operator_name, 'Unknown') AS operator_name,
+           (c.network_diagnostics->>'signalStrength')::int   AS signal_strength,
+           c.network_diagnostics->>'radioType'               AS radio_type,
+           c.network_diagnostics->>'estimatedGeneration'     AS network_gen,
+           (c.network_diagnostics->>'pingMs')::int           AS ping_ms,
+           (c.network_diagnostics->>'cellId')::int           AS cell_id,
+           c.network_diagnostics->>'carrier'                 AS carrier
+    FROM complaints c
+    LEFT JOIN operators o ON o.operator_id = c.operator_id
+    WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL
+      AND c.network_diagnostics IS NOT NULL
+    ORDER BY c.created_at DESC
+    LIMIT 1000
+  `);
+}
+
+export async function getCellPerformance() {
+  const rows = await query(`
+    SELECT (c.network_diagnostics->>'cellId')::int AS cell_id,
+           c.network_diagnostics->>'carrier'       AS carrier,
+           c.network_diagnostics->>'radioType'     AS radio_type,
+           COALESCE(o.operator_name, 'Unknown')    AS operator_name,
+           COALESCE(d.name, 'Unknown')             AS district,
+           COUNT(*)::int                           AS complaint_count,
+           ROUND(AVG((c.network_diagnostics->>'signalStrength')::numeric), 0) AS avg_signal,
+           ROUND(AVG((c.network_diagnostics->>'pingMs')::numeric), 0)         AS avg_ping,
+           MIN(c.created_at) AS first_seen,
+           MAX(c.created_at) AS last_seen,
+           ROUND(AVG(c.latitude)::numeric, 6)  AS avg_lat,
+           ROUND(AVG(c.longitude)::numeric, 6) AS avg_lng
+    FROM complaints c
+    LEFT JOIN operators o ON o.operator_id = c.operator_id
+    LEFT JOIN districts d ON d.district_id = c.district_id
+    WHERE c.network_diagnostics->>'cellId' IS NOT NULL
+      AND (c.network_diagnostics->>'cellId')::int > 0
+    GROUP BY cell_id, carrier, radio_type, o.operator_name, d.name
+    ORDER BY complaint_count DESC
+    LIMIT 100
+  `);
+  return rows.map(r => ({
+    ...r,
+    complaint_count: Number(r.complaint_count),
+    avg_signal: r.avg_signal ? Number(r.avg_signal) : null,
+    avg_ping:   r.avg_ping   ? Number(r.avg_ping)   : null,
+    avg_lat:    r.avg_lat    ? Number(r.avg_lat)     : null,
+    avg_lng:    r.avg_lng    ? Number(r.avg_lng)     : null,
+  }));
+}
+
+export async function getNetworkMetrics() {
+  const [byOperator, byGeneration, signalDistribution] = await Promise.all([
+    query(`
+      SELECT COALESCE(o.operator_name, 'Unknown') AS operator_name,
+             COUNT(*)::int AS total,
+             ROUND(AVG((c.network_diagnostics->>'signalStrength')::numeric), 0)::int AS avg_signal,
+             ROUND(AVG((c.network_diagnostics->>'pingMs')::numeric), 0)::int         AS avg_ping,
+             SUM(CASE WHEN (c.network_diagnostics->>'signalStrength')::int > -85  THEN 1 ELSE 0 END)::int AS good_signal,
+             SUM(CASE WHEN (c.network_diagnostics->>'signalStrength')::int BETWEEN -100 AND -85 THEN 1 ELSE 0 END)::int AS fair_signal,
+             SUM(CASE WHEN (c.network_diagnostics->>'signalStrength')::int < -100 THEN 1 ELSE 0 END)::int AS poor_signal
+      FROM complaints c
+      LEFT JOIN operators o ON o.operator_id = c.operator_id
+      WHERE c.network_diagnostics->>'signalStrength' IS NOT NULL
+      GROUP BY o.operator_name
+      ORDER BY total DESC
+    `),
+    query(`
+      SELECT c.network_diagnostics->>'estimatedGeneration' AS generation,
+             COALESCE(o.operator_name, 'Unknown') AS operator_name,
+             COUNT(*)::int AS total
+      FROM complaints c
+      LEFT JOIN operators o ON o.operator_id = c.operator_id
+      WHERE c.network_diagnostics->>'estimatedGeneration' IS NOT NULL
+      GROUP BY generation, o.operator_name
+      ORDER BY generation, total DESC
+    `),
+    query(`
+      SELECT CASE
+               WHEN (c.network_diagnostics->>'signalStrength')::int > -70  THEN 'Excellent'
+               WHEN (c.network_diagnostics->>'signalStrength')::int > -85  THEN 'Good'
+               WHEN (c.network_diagnostics->>'signalStrength')::int > -100 THEN 'Fair'
+               ELSE 'Poor'
+             END AS quality,
+             COUNT(*)::int AS total
+      FROM complaints c
+      WHERE c.network_diagnostics->>'signalStrength' IS NOT NULL
+      GROUP BY quality
+      ORDER BY MIN((c.network_diagnostics->>'signalStrength')::int) DESC
+    `),
+  ]);
+
+  return {
+    byOperator: byOperator.map(r => ({
+      ...r,
+      total:       Number(r.total),
+      avg_signal:  r.avg_signal  ? Number(r.avg_signal)  : null,
+      avg_ping:    r.avg_ping    ? Number(r.avg_ping)    : null,
+      good_signal: Number(r.good_signal),
+      fair_signal: Number(r.fair_signal),
+      poor_signal: Number(r.poor_signal),
+    })),
+    byGeneration: byGeneration.map(r => ({ ...r, total: Number(r.total) })),
+    signalDistribution: signalDistribution.map(r => ({ ...r, total: Number(r.total) })),
+  };
+}
+
+export async function getCoverageGaps() {
+  const rows = await query(`
+    SELECT COALESCE(d.name, 'Unknown') AS district,
+           COALESCE(o.operator_name, 'Unknown') AS operator_name,
+           COUNT(*)::int AS complaint_count,
+           ROUND(AVG((c.network_diagnostics->>'signalStrength')::numeric), 0)::int AS avg_signal,
+           ROUND(AVG((c.network_diagnostics->>'pingMs')::numeric), 0)::int AS avg_ping,
+           ROUND(AVG(c.latitude)::numeric, 6)  AS center_lat,
+           ROUND(AVG(c.longitude)::numeric, 6) AS center_lng,
+           SUM(CASE WHEN (c.network_diagnostics->>'signalStrength')::int < -100 THEN 1 ELSE 0 END)::int AS poor_signal_count,
+           SUM(CASE WHEN c.issue_type IN ('No Signal', 'No Internet', 'Slow Internet') THEN 1 ELSE 0 END)::int AS coverage_complaints
+    FROM complaints c
+    LEFT JOIN operators o ON o.operator_id = c.operator_id
+    LEFT JOIN districts d ON d.district_id = c.district_id
+    WHERE c.network_diagnostics IS NOT NULL
+      AND c.network_diagnostics->>'signalStrength' IS NOT NULL
+    GROUP BY d.name, o.operator_name
+    HAVING COUNT(*) >= 2
+    ORDER BY avg_signal ASC, complaint_count DESC
+    LIMIT 50
+  `);
+  return rows.map(r => ({
+    ...r,
+    complaint_count:     Number(r.complaint_count),
+    avg_signal:          r.avg_signal ? Number(r.avg_signal) : null,
+    avg_ping:            r.avg_ping   ? Number(r.avg_ping)   : null,
+    center_lat:          r.center_lat ? Number(r.center_lat) : null,
+    center_lng:          r.center_lng ? Number(r.center_lng) : null,
+    poor_signal_count:   Number(r.poor_signal_count),
+    coverage_complaints: Number(r.coverage_complaints),
+  }));
+}
+
 export async function getOperatorBenchmark() {
   const rows = await query(`
     SELECT o.operator_name,

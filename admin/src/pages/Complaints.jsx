@@ -127,14 +127,17 @@ function ComplaintDrawer({ complaint, onClose, onUpdated, users }) {
           </Box>
         )}
 
-        {complaint.area_detail && (
-          <Box sx={{ mb: 2.5 }}>
-            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Location / Landmark</Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {complaint.area_detail}
+        <Box sx={{ mb: 2.5 }}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>Location / Landmark</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {complaint.area_detail || 'N/A'}
+          </Typography>
+          {(complaint.latitude || complaint.longitude) && (
+            <Typography variant="caption" color="text.secondary" fontFamily="monospace" sx={{ mt: 0.5, display: 'block' }}>
+              GPS: {Number(complaint.latitude).toFixed(5)}, {Number(complaint.longitude).toFixed(5)}
             </Typography>
-          </Box>
-        )}
+          )}
+        </Box>
 
         {complaint.reporter_name ? (
           <Box sx={{ mb: 2.5 }}>
@@ -156,10 +159,11 @@ function ComplaintDrawer({ complaint, onClose, onUpdated, users }) {
           </Box>
         ) : null}
 
-        {complaint.network_diagnostics && (() => {
-          const d = typeof complaint.network_diagnostics === 'string'
-            ? JSON.parse(complaint.network_diagnostics)
-            : complaint.network_diagnostics;
+        {(() => {
+          const raw = complaint.network_diagnostics;
+          const d = raw
+            ? (typeof raw === 'string' ? JSON.parse(raw) : raw)
+            : {};
 
           const signalColor = (dbm) => {
             if (dbm == null) return 'text.secondary';
@@ -174,97 +178,71 @@ function ComplaintDrawer({ complaint, onClose, onUpdated, users }) {
             return 'Poor';
           };
 
-          const hasCellData = d.carrier || d.radioType || d.cellId != null || d.lac != null || d.signalStrength != null || d.mcc || d.mnc;
-          const hasConnectionData = d.connectionType || d.estimatedGeneration || d.pingMs != null;
-          const hasDeviceData = (typeof d.device === 'string' && d.device) || d.deviceModel || d.osVersion;
-          const hasLegacyData = d.geo || (typeof d.connection === 'object' && d.connection) || (typeof d.ping === 'object' && d.ping) || (typeof d.device === 'object' && d.device);
+          const na = <Typography variant="caption" fontFamily="monospace" sx={{ color: 'text.disabled' }}>N/A</Typography>;
 
-          const DiagRow = ({ label, value, color }) => value != null && value !== '' ? (
+          const DiagRow = ({ label, value, color }) => (
             <>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{label}</Typography>
-              <Typography variant="caption" fontFamily="monospace" sx={{ color: color || 'text.primary' }}>{value}</Typography>
+              {value != null && value !== ''
+                ? <Typography variant="caption" fontFamily="monospace" sx={{ color: color || 'text.primary' }}>{value}</Typography>
+                : na}
             </>
-          ) : null;
+          );
+
+          const hasLegacyData = d.geo || (typeof d.connection === 'object' && d.connection) || (typeof d.ping === 'object' && d.ping) || (typeof d.device === 'object' && d.device);
+
+          const gpsValue = complaint.latitude && complaint.longitude
+            ? `${Number(complaint.latitude).toFixed(5)}, ${Number(complaint.longitude).toFixed(5)}`
+            : (d.geo?.available ? `${d.geo.latitude?.toFixed(5)}, ${d.geo.longitude?.toFixed(5)} (±${Math.round(d.geo.accuracy_m || 0)}m)` : null);
 
           return (
             <Box sx={{ mb: 2.5 }}>
               <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Network Diagnostics</Typography>
               <Stack spacing={1.5}>
-                {hasConnectionData && (
-                  <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-                    <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ mb: 1, display: 'block' }}>CONNECTION</Typography>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0.75, fontSize: 13 }}>
-                      <DiagRow label="Type" value={d.connectionType} />
-                      <DiagRow label="Generation" value={d.estimatedGeneration} />
-                      <DiagRow label="Ping" value={d.pingMs != null ? `${d.pingMs} ms` : null} />
-                    </Box>
-                  </Paper>
-                )}
+                <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ mb: 1, display: 'block' }}>GPS &amp; CONNECTION</Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0.75, fontSize: 13 }}>
+                    <DiagRow label="GPS Location" value={gpsValue} />
+                    <DiagRow label="Type" value={d.connectionType || (d.connection?.available ? d.connection.effectiveType?.toUpperCase() : null)} />
+                    <DiagRow label="Generation" value={d.estimatedGeneration || (d.connection?.available ? `${d.connection.effectiveType?.toUpperCase()} · ${d.connection.downlinkMbps ?? '?'} Mbps` : null)} />
+                    <DiagRow label="Ping" value={d.pingMs != null ? `${d.pingMs} ms` : (d.ping?.available ? `${d.ping.rttMs} ms` : null)} />
+                  </Box>
+                </Paper>
 
-                {hasCellData && (
-                  <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-                    <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ mb: 1, display: 'block' }}>CELL / SITE DETAILS</Typography>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0.75, fontSize: 13 }}>
-                      <DiagRow label="Carrier" value={d.carrier} />
-                      <DiagRow label="Radio Type" value={d.radioType} />
-                      <DiagRow label="Cell ID" value={d.cellId} />
-                      <DiagRow label="LAC / TAC" value={d.lac} />
-                      {d.signalStrength != null && (
-                        <>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Signal</Typography>
-                          <Stack direction="row" spacing={0.75} alignItems="center">
-                            <Typography variant="caption" fontFamily="monospace" sx={{ color: signalColor(d.signalStrength) }}>
-                              {d.signalStrength} dBm
-                            </Typography>
-                            <Chip size="small" label={signalLabel(d.signalStrength)} sx={{
-                              height: 18, fontSize: 10, fontWeight: 700,
-                              bgcolor: alpha(signalColor(d.signalStrength), 0.12),
-                              color: signalColor(d.signalStrength),
-                            }} />
-                          </Stack>
-                        </>
-                      )}
-                      <DiagRow label="MCC / MNC" value={d.mcc && d.mnc ? `${d.mcc} / ${d.mnc}` : (d.mcc || d.mnc || null)} />
-                    </Box>
-                  </Paper>
-                )}
+                <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ mb: 1, display: 'block' }}>CELL / SITE DETAILS</Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0.75, fontSize: 13 }}>
+                    <DiagRow label="Carrier" value={d.carrier} />
+                    <DiagRow label="Radio Type" value={d.radioType} />
+                    <DiagRow label="Cell ID" value={d.cellId} />
+                    <DiagRow label="LAC / TAC" value={d.lac} />
+                    <>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Signal</Typography>
+                      {d.signalStrength != null ? (
+                        <Stack direction="row" spacing={0.75} alignItems="center">
+                          <Typography variant="caption" fontFamily="monospace" sx={{ color: signalColor(d.signalStrength) }}>
+                            {d.signalStrength} dBm
+                          </Typography>
+                          <Chip size="small" label={signalLabel(d.signalStrength)} sx={{
+                            height: 18, fontSize: 10, fontWeight: 700,
+                            bgcolor: alpha(signalColor(d.signalStrength), 0.12),
+                            color: signalColor(d.signalStrength),
+                          }} />
+                        </Stack>
+                      ) : na}
+                    </>
+                    <DiagRow label="MCC / MNC" value={d.mcc && d.mnc ? `${d.mcc} / ${d.mnc}` : (d.mcc || d.mnc || null)} />
+                  </Box>
+                </Paper>
 
-                {hasDeviceData && (
-                  <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-                    <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ mb: 1, display: 'block' }}>DEVICE</Typography>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0.75, fontSize: 13 }}>
-                      <DiagRow label="Screen" value={typeof d.device === 'string' ? d.device : null} />
-                      <DiagRow label="Model" value={d.deviceModel} />
-                      <DiagRow label="OS" value={d.osVersion} />
-                    </Box>
-                  </Paper>
-                )}
-
-                {hasLegacyData && (
-                  <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0.75, fontSize: 13 }}>
-                      <DiagRow label="GPS Location" value={
-                        d.geo?.available
-                          ? `${d.geo.latitude?.toFixed(5)}, ${d.geo.longitude?.toFixed(5)} (±${Math.round(d.geo.accuracy_m || 0)}m)`
-                          : (d.geo ? 'Not shared' : null)
-                      } />
-                      <DiagRow label="Network Type" value={
-                        d.connection?.available
-                          ? `${(d.connection.effectiveType || '?').toUpperCase()} · ${d.connection.downlinkMbps ?? '?'} Mbps down`
-                          : (d.connection ? 'unavailable' : null)
-                      } />
-                      <DiagRow label="Ping to NatCA" value={
-                        d.ping?.available ? `${d.ping.rttMs} ms` : (d.ping ? '—' : null)
-                      } />
-                      {typeof d.device === 'object' && d.device && (
-                        <>
-                          <DiagRow label="Screen" value={d.device.screen} />
-                          <DiagRow label="Platform" value={d.device.platform} />
-                        </>
-                      )}
-                    </Box>
-                  </Paper>
-                )}
+                <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ mb: 1, display: 'block' }}>DEVICE</Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 0.75, fontSize: 13 }}>
+                    <DiagRow label="Screen" value={typeof d.device === 'string' ? d.device : (typeof d.device === 'object' && d.device?.screen ? d.device.screen : null)} />
+                    <DiagRow label="Model" value={d.deviceModel} />
+                    <DiagRow label="OS / Platform" value={d.osVersion || (typeof d.device === 'object' && d.device?.platform ? d.device.platform : null)} />
+                  </Box>
+                </Paper>
               </Stack>
               <Divider sx={{ my: 2 }} />
             </Box>

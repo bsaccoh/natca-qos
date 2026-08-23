@@ -227,36 +227,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // Divider OR
-                Row(
-                  children: const [
-                    Expanded(child: Divider(color: AppColors.border)),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text("OR", style: TextStyle(color: AppColors.textLight, fontSize: 12)),
-                    ),
-                    Expanded(child: Divider(color: AppColors.border)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Guest Login
-                SizedBox(
-                  height: 50,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      authNotifier.setGuest();
-                      context.go('/dashboard');
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primaryBlue,
-                      side: const BorderSide(color: AppColors.primaryBlue),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                    ),
-                    child: const Text("Continue as Guest", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-                ),
               ],
             ),
           ),

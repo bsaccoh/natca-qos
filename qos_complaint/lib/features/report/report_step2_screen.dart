@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
@@ -5,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/providers/state_providers.dart';
+import '../../core/services/api_client.dart';
 import 'widgets/report_progress.dart';
 
 class ReportStep2Screen extends ConsumerStatefulWidget {
@@ -23,6 +25,11 @@ class _ReportStep2ScreenState extends ConsumerState<ReportStep2Screen> with Sing
   double _currentLng = -13.2317;
   bool _loadingLocation = false;
 
+  List<Map<String, dynamic>> _districts = [];
+  int? _selectedDistrictId;
+  String? _selectedDistrictName;
+  bool _loadingDistricts = false;
+
   @override
   void initState() {
     super.initState();
@@ -30,7 +37,33 @@ class _ReportStep2ScreenState extends ConsumerState<ReportStep2Screen> with Sing
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _getCurrentLocation());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _getCurrentLocation();
+      _fetchDistricts();
+    });
+  }
+
+  Future<void> _fetchDistricts() async {
+    setState(() => _loadingDistricts = true);
+    try {
+      final response = await apiClient.get('/districts').timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200 && mounted) {
+        final data = json.decode(response.body);
+        final rows = (data['data'] ?? data) as List;
+        setState(() {
+          _districts = rows.map<Map<String, dynamic>>((r) => <String, dynamic>{
+            'district_id': r['district_id'],
+            'name': r['name'],
+            'province': r['province'] ?? '',
+          }).toList();
+          _loadingDistricts = false;
+        });
+      } else {
+        if (mounted) setState(() => _loadingDistricts = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingDistricts = false);
+    }
   }
 
   @override
@@ -246,6 +279,60 @@ class _ReportStep2ScreenState extends ConsumerState<ReportStep2Screen> with Sing
               ),
             ),
           ),
+
+          const SizedBox(height: 16),
+
+          // District dropdown
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.dynamicCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.dynamicBorder),
+              ),
+              child: _loadingDistricts
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Row(
+                        children: [
+                          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(width: 12),
+                          Text("Loading districts…"),
+                        ],
+                      ),
+                    )
+                  : DropdownButtonFormField<int>(
+                      value: _selectedDistrictId,
+                      decoration: InputDecoration(
+                        labelText: 'District',
+                        labelStyle: TextStyle(color: AppColors.textSecondary),
+                        prefixIcon: const Icon(Icons.map_rounded, color: AppColors.primaryBlue, size: 20),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      isExpanded: true,
+                      dropdownColor: AppColors.dynamicCard,
+                      style: TextStyle(color: AppColors.dynamicTextPrimary, fontSize: 14),
+                      hint: Text("Select your district", style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                      items: _districts.map<DropdownMenuItem<int>>((d) {
+                        return DropdownMenuItem<int>(
+                          value: d['district_id'] as int,
+                          child: Text(d['name'] as String),
+                        );
+                      }).toList(),
+                      onChanged: (id) {
+                        if (id == null) return;
+                        final match = _districts.firstWhere((d) => d['district_id'] == id);
+                        setState(() {
+                          _selectedDistrictId = id;
+                          _selectedDistrictName = match['name'] as String;
+                        });
+                      },
+                    ),
+            ),
+          ),
           const SizedBox(height: 16),
 
           // Action links
@@ -294,12 +381,24 @@ class _ReportStep2ScreenState extends ConsumerState<ReportStep2Screen> with Sing
         height: 52,
         child: ElevatedButton(
           onPressed: () {
+            if (_selectedDistrictId == null && _districts.isNotEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please select your district')),
+              );
+              return;
+            }
             ref.read(draftReportProvider.notifier).updateLocation(
               _currentStreet,
               _currentCity,
               _currentLat,
               _currentLng,
             );
+            if (_selectedDistrictId != null && _selectedDistrictName != null) {
+              ref.read(draftReportProvider.notifier).updateDistrict(
+                _selectedDistrictId!,
+                _selectedDistrictName!,
+              );
+            }
             context.push('/report/contact');
           },
           style: ElevatedButton.styleFrom(

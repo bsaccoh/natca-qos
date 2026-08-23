@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/router/app_router.dart';
 import 'app/theme/app_theme.dart';
 import 'app/providers/state_providers.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
@@ -13,6 +11,9 @@ void main() {
     ),
   );
 }
+
+const _fontFamily = 'Inter';
+const _fallback = ['SF Pro Display', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'sans-serif'];
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
@@ -33,7 +34,8 @@ class MyApp extends ConsumerWidget {
           seedColor: AppColors.primaryBlue,
           brightness: Brightness.light,
         ),
-        textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
+        fontFamily: _fontFamily,
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: _fontFamily, fontFamilyFallback: _fallback),
         cardTheme: const CardThemeData(
           elevation: 2,
           shadowColor: Color(0x1A1A3C8F), // AppColors.primaryBlue.withAlpha(25) but const
@@ -73,7 +75,8 @@ class MyApp extends ConsumerWidget {
           seedColor: AppColors.primaryBlue,
           brightness: Brightness.dark,
         ),
-        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+        fontFamily: _fontFamily,
+        textTheme: ThemeData.dark().textTheme.apply(fontFamily: _fontFamily, fontFamilyFallback: _fallback),
         cardTheme: const CardThemeData(
           elevation: 4,
           shadowColor: Colors.black45,

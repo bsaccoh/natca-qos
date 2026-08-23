@@ -34,6 +34,22 @@ router.get('/operator-benchmark', requireRole(...STAFF, 'OPERATOR_ADMIN'), async
   ok(res, await svc.getOperatorBenchmark());
 }));
 
+router.get('/qoe-heatmap', requireRole(...STAFF), asyncHandler(async (_req, res) => {
+  ok(res, await svc.getQoeHeatmap());
+}));
+
+router.get('/cell-performance', requireRole(...STAFF), asyncHandler(async (_req, res) => {
+  ok(res, await svc.getCellPerformance());
+}));
+
+router.get('/network-metrics', requireRole(...STAFF), asyncHandler(async (_req, res) => {
+  ok(res, await svc.getNetworkMetrics());
+}));
+
+router.get('/coverage-gaps', requireRole(...STAFF), asyncHandler(async (_req, res) => {
+  ok(res, await svc.getCoverageGaps());
+}));
+
 router.get('/dashboard-kpis', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (_req, res) => {
   ok(res, await svc.getDashboardKpis());
 }));

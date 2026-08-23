@@ -10,6 +10,7 @@ import {
   BarChart, Bar, Cell, Legend, PieChart, Pie, AreaChart, Area,
 } from 'recharts';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import RefreshIcon      from '@mui/icons-material/Refresh';
 import AccessTimeIcon   from '@mui/icons-material/AccessTime';
 import CheckCircleIcon  from '@mui/icons-material/CheckCircle';
@@ -19,6 +20,9 @@ import StarIcon         from '@mui/icons-material/Star';
 import TrendingUpIcon   from '@mui/icons-material/TrendingUp';
 import FingerprintIcon  from '@mui/icons-material/Fingerprint';
 import InsightsIcon     from '@mui/icons-material/Insights';
+import CellTowerIcon    from '@mui/icons-material/CellTower';
+import SignalCellularAltIcon from '@mui/icons-material/SignalCellularAlt';
+import NetworkCheckIcon from '@mui/icons-material/NetworkCheck';
 import { get } from '../api/client.js';
 import PageHeader from '../components/PageHeader.jsx';
 import { getOperatorColor } from '../theme/theme.js';
@@ -73,6 +77,10 @@ export default function Analytics() {
   const [heatmap,    setHeatmap]    = useState([]);
   const [kyc,        setKyc]        = useState(null);
   const [kpiData,    setKpiData]    = useState(null);
+  const [qoeHeatmap, setQoeHeatmap] = useState([]);
+  const [cellPerf,   setCellPerf]   = useState([]);
+  const [netMetrics, setNetMetrics] = useState(null);
+  const [coverGaps,  setCoverGaps]  = useState([]);
   const [loading,    setLoading]    = useState(true);
 
   const loadAll = useCallback(async () => {
@@ -85,8 +93,12 @@ export default function Analytics() {
       get('/analytics/heatmap'),
       get('/kyc/summary'),
       get('/analytics/dashboard-kpis'),
+      get('/analytics/qoe-heatmap'),
+      get('/analytics/cell-performance'),
+      get('/analytics/network-metrics'),
+      get('/analytics/coverage-gaps'),
     ]);
-    const [ovR, cmpR, advR, bmR, hmR, kycR, kpiR] = results;
+    const [ovR, cmpR, advR, bmR, hmR, kycR, kpiR, qoeR, cellR, netR, gapR] = results;
     if (ovR.status  === 'fulfilled') setOverview(ovR.value.data);
     if (cmpR.status === 'fulfilled') setComplaints(cmpR.value.data);
     if (advR.status === 'fulfilled') setAdvanced(advR.value.data);
@@ -94,6 +106,10 @@ export default function Analytics() {
     if (hmR.status  === 'fulfilled') setHeatmap(hmR.value.data ?? []);
     if (kycR.status === 'fulfilled') setKyc(kycR.value.data);
     if (kpiR.status === 'fulfilled') setKpiData(kpiR.value.data);
+    if (qoeR.status === 'fulfilled') setQoeHeatmap(qoeR.value.data ?? []);
+    if (cellR.status === 'fulfilled') setCellPerf(cellR.value.data ?? []);
+    if (netR.status === 'fulfilled') setNetMetrics(netR.value.data ?? null);
+    if (gapR.status === 'fulfilled') setCoverGaps(gapR.value.data ?? []);
     setLoading(false);
   }, []);
 
@@ -125,7 +141,7 @@ export default function Analytics() {
   const opNames     = advanced?.operatorNames ?? [];
 
   return (
-    <Box sx={{ width: '100%', minHeight: '100%', pb: 4 }}>
+    <Box sx={{ minHeight: '100%', pb: 4 }}>
       <PageHeader
         icon={<InsightsIcon />}
         title="Telecom Complaint & KYC Analytics"
@@ -356,6 +372,257 @@ export default function Analytics() {
             )}
           </ChartCard>
         </Box>
+      </Box>
+
+      {/* ── QoE / Network Performance Analytics ─────────────────────────── */}
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CellTowerIcon color="primary" /> Telecom QoE &amp; Network Performance
+        </Typography>
+
+        {/* QoE Heat Map */}
+        <Paper sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', height: 450, overflow: 'hidden', position: 'relative', mb: 3 }}>
+          <Box sx={{ p: 2, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, bgcolor: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(4px)' }}>
+            <Typography variant="subtitle2" fontWeight={700}>QoE Signal Strength Heat Map</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {qoeHeatmap.length} complaints with network diagnostics — colored by signal strength
+            </Typography>
+          </Box>
+          {qoeHeatmap.length > 0 ? (
+            <MapContainer center={[8.460555, -11.779889]} zoom={7} style={{ height: '100%', width: '100%', zIndex: 1 }}>
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+              />
+              {qoeHeatmap.map((c) => {
+                const sig = c.signal_strength;
+                const color = sig == null ? '#9ca3af'
+                  : sig > -70 ? '#10b981'
+                  : sig > -85 ? '#3b82f6'
+                  : sig > -100 ? '#f59e0b'
+                  : '#ef4444';
+                return (
+                  <CircleMarker
+                    key={c.complaint_id}
+                    center={[Number(c.latitude), Number(c.longitude)]}
+                    radius={7}
+                    fillColor={color}
+                    color="#fff"
+                    weight={1}
+                    opacity={1}
+                    fillOpacity={0.8}
+                  >
+                    <Popup>
+                      <strong>{c.complaint_ref}</strong><br />
+                      {c.operator_name} — {c.issue_type}<br />
+                      Signal: {sig != null ? `${sig} dBm` : 'N/A'}<br />
+                      Network: {c.network_gen || c.radio_type || 'N/A'}<br />
+                      Ping: {c.ping_ms != null ? `${c.ping_ms}ms` : 'N/A'}
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
+            </MapContainer>
+          ) : (
+            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+              <Typography color="text.secondary">No QoE data available yet</Typography>
+            </Box>
+          )}
+        </Paper>
+
+        {/* Signal Quality + Network Generation */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2,1fr)' }, gap: 3, mb: 3 }}>
+          <ChartCard title="Signal Quality Distribution" height={340} loading={loading && !netMetrics}>
+            {(netMetrics?.signalDistribution ?? []).length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={netMetrics.signalDistribution.map((d) => ({
+                    name: d.quality, value: d.total,
+                    fill: d.quality === 'Excellent' ? '#10b981' : d.quality === 'Good' ? '#3b82f6' : d.quality === 'Fair' ? '#f59e0b' : '#ef4444',
+                  }))} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                    outerRadius={90} innerRadius={50} paddingAngle={3}
+                    label={renderLabel} labelLine={false}>
+                    {netMetrics.signalDistribution.map((d, i) => (
+                      <Cell key={i} fill={d.quality === 'Excellent' ? '#10b981' : d.quality === 'Good' ? '#3b82f6' : d.quality === 'Fair' ? '#f59e0b' : '#ef4444'} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip />
+                  <Legend verticalAlign="bottom" />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" height="80%">
+                <Typography color="text.secondary">No signal data</Typography>
+              </Box>
+            )}
+          </ChartCard>
+
+          <ChartCard title="Avg Signal Strength by Operator (dBm)" height={340} loading={loading && !netMetrics}>
+            {(netMetrics?.byOperator ?? []).length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={netMetrics.byOperator} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} domain={['dataMin - 10', 0]} />
+                  <YAxis type="category" dataKey="operator_name" tick={{ fontSize: 11, fontWeight: 600 }} width={80} />
+                  <RechartsTooltip formatter={(v) => [`${v} dBm`, 'Avg Signal']} />
+                  <Bar dataKey="avg_signal" name="Avg Signal (dBm)" barSize={16} radius={[0, 4, 4, 0]}>
+                    {netMetrics.byOperator.map((e, i) => (
+                      <Cell key={i} fill={e.avg_signal > -85 ? '#10b981' : e.avg_signal > -100 ? '#f59e0b' : '#ef4444'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" height="80%">
+                <Typography color="text.secondary">No operator signal data</Typography>
+              </Box>
+            )}
+          </ChartCard>
+        </Box>
+
+        {/* Operator Signal Breakdown + Avg Ping */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2,1fr)' }, gap: 3, mb: 3 }}>
+          <ChartCard title="Signal Quality Breakdown by Operator" height={360} loading={loading && !netMetrics}>
+            {(netMetrics?.byOperator ?? []).length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={netMetrics.byOperator} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis dataKey="operator_name" tick={{ fontSize: 10, fontWeight: 600 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <RechartsTooltip />
+                  <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 8 }} />
+                  <Bar dataKey="good_signal"  name="Good (> -85)" stackId="s" fill="#10b981" barSize={32} />
+                  <Bar dataKey="fair_signal"  name="Fair (-100 to -85)" stackId="s" fill="#f59e0b" barSize={32} />
+                  <Bar dataKey="poor_signal"  name="Poor (< -100)" stackId="s" fill="#ef4444" barSize={32} radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" height="80%">
+                <Typography color="text.secondary">No signal breakdown data</Typography>
+              </Box>
+            )}
+          </ChartCard>
+
+          <ChartCard title="Avg Latency by Operator (ms)" height={360} loading={loading && !netMetrics}>
+            {(netMetrics?.byOperator ?? []).filter(o => o.avg_ping).length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={netMetrics.byOperator.filter(o => o.avg_ping)} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis dataKey="operator_name" tick={{ fontSize: 10, fontWeight: 600 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <RechartsTooltip formatter={(v) => [`${v} ms`, 'Avg Ping']} />
+                  <Bar dataKey="avg_ping" name="Avg Ping (ms)" barSize={32} radius={[4,4,0,0]}>
+                    {netMetrics.byOperator.filter(o => o.avg_ping).map((e, i) => (
+                      <Cell key={i} fill={e.avg_ping < 100 ? '#10b981' : e.avg_ping < 200 ? '#f59e0b' : '#ef4444'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" height="80%">
+                <Typography color="text.secondary">No latency data</Typography>
+              </Box>
+            )}
+          </ChartCard>
+        </Box>
+
+        {/* Cell/Site Performance Table */}
+        <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider', mb: 3 }}>
+          <Typography variant="subtitle2" fontWeight={700} mb={2} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SignalCellularAltIcon fontSize="small" /> Cell/Site Performance Report
+          </Typography>
+          {cellPerf.length > 0 ? (
+            <Box sx={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: `2px solid ${theme.palette.divider}` }}>
+                    {['Cell ID', 'Operator', 'District', 'Radio', 'Complaints', 'Avg Signal', 'Avg Ping', 'Last Seen'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: theme.palette.text.secondary }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cellPerf.slice(0, 25).map((row, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
+                      <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 600 }}>{row.cell_id}</td>
+                      <td style={{ padding: '8px 12px' }}>{row.operator_name}</td>
+                      <td style={{ padding: '8px 12px' }}>{row.district}</td>
+                      <td style={{ padding: '8px 12px' }}>{row.radio_type || '—'}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: 700, color: row.complaint_count >= 5 ? '#ef4444' : 'inherit' }}>
+                        {row.complaint_count}
+                      </td>
+                      <td style={{ padding: '8px 12px', color: row.avg_signal > -85 ? '#10b981' : row.avg_signal > -100 ? '#f59e0b' : '#ef4444', fontWeight: 600 }}>
+                        {row.avg_signal != null ? `${row.avg_signal} dBm` : '—'}
+                      </td>
+                      <td style={{ padding: '8px 12px' }}>
+                        {row.avg_ping != null ? `${row.avg_ping} ms` : '—'}
+                      </td>
+                      <td style={{ padding: '8px 12px', fontSize: 11 }}>
+                        {row.last_seen ? new Date(row.last_seen).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Box>
+          ) : (
+            <Box display="flex" justifyContent="center" alignItems="center" height={120}>
+              <Typography color="text.secondary">No cell tower data collected yet</Typography>
+            </Box>
+          )}
+        </Paper>
+
+        {/* Coverage Gaps */}
+        <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="subtitle2" fontWeight={700} mb={2} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <NetworkCheckIcon fontSize="small" color="error" /> Coverage Gap Detection
+          </Typography>
+          <Typography variant="caption" color="text.secondary" mb={2} display="block">
+            Districts/operators with consistently poor signal (&lt; -100 dBm) and connectivity complaints
+          </Typography>
+          {coverGaps.length > 0 ? (
+            <Box sx={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: `2px solid ${theme.palette.divider}` }}>
+                    {['District', 'Operator', 'Complaints', 'Avg Signal', 'Poor Signal', 'Coverage Issues', 'Avg Ping'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: theme.palette.text.secondary }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {coverGaps.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${theme.palette.divider}`, background: row.avg_signal && row.avg_signal < -100 ? alpha('#ef4444', 0.06) : 'transparent' }}>
+                      <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.district}</td>
+                      <td style={{ padding: '8px 12px' }}>{row.operator_name}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: 700 }}>{row.complaint_count}</td>
+                      <td style={{ padding: '8px 12px', color: row.avg_signal > -85 ? '#10b981' : row.avg_signal > -100 ? '#f59e0b' : '#ef4444', fontWeight: 600 }}>
+                        {row.avg_signal != null ? `${row.avg_signal} dBm` : '—'}
+                      </td>
+                      <td style={{ padding: '8px 12px', color: '#ef4444', fontWeight: row.poor_signal_count > 0 ? 700 : 400 }}>
+                        {row.poor_signal_count}
+                      </td>
+                      <td style={{ padding: '8px 12px', color: row.coverage_complaints > 0 ? '#ef4444' : 'inherit', fontWeight: row.coverage_complaints > 0 ? 700 : 400 }}>
+                        {row.coverage_complaints}
+                      </td>
+                      <td style={{ padding: '8px 12px' }}>
+                        {row.avg_ping != null ? `${row.avg_ping} ms` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Box>
+          ) : (
+            <Box display="flex" justifyContent="center" alignItems="center" height={120}>
+              <Typography color="text.secondary">No coverage gap data detected yet</Typography>
+            </Box>
+          )}
+        </Paper>
       </Box>
     </Box>
   );
