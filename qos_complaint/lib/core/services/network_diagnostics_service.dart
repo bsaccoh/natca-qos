@@ -59,9 +59,12 @@ class NetworkDiagnosticsService {
   static const _channel = MethodChannel('com.natca.qoe/cell_info');
 
   static String get _pingUrl {
-    if (kIsWeb) return 'http://localhost:5000/';
-    if (defaultTargetPlatform == TargetPlatform.android) return 'http://10.0.2.2:5000/';
-    return 'http://localhost:5000/';
+    if (kDebugMode) {
+      if (kIsWeb) return 'http://localhost:5000/';
+      if (defaultTargetPlatform == TargetPlatform.android) return 'http://10.0.2.2:5000/';
+      return 'http://localhost:5000/';
+    }
+    return 'https://natca-cms-backend.onrender.com/';
   }
 
   static Future<NetworkDiagnostics> capture(Size screenSize) async {

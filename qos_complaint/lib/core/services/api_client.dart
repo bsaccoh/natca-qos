@@ -14,14 +14,19 @@ class XFileBytes {
 // 10.0.2.2 = Android emulator loopback to host localhost
 // localhost = web / Windows desktop
 // For a physical device on the same WiFi, replace with your machine's LAN IP
+const String _kProdBase = 'https://natca-cms-backend.onrender.com/api/v1';
+
 String get _kBaseUrl {
-  if (kIsWeb) return 'http://localhost:5000/api/v1';
-  try {
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:5000/api/v1';
-    }
-  } catch (_) {}
-  return 'http://localhost:5000/api/v1';
+  if (kDebugMode) {
+    if (kIsWeb) return 'http://localhost:5000/api/v1';
+    try {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        return 'http://10.0.2.2:5000/api/v1';
+      }
+    } catch (_) {}
+    return 'http://localhost:5000/api/v1';
+  }
+  return _kProdBase;
 }
 
 const String _kAccessTokenKey = 'access_token';
