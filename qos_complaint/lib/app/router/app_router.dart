@@ -23,6 +23,7 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/otp_verification_screen.dart';
 import '../../features/auth/biometric_setup_screen.dart';
+import '../../features/auth/reset_password_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -49,6 +50,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/biometric-setup',
       builder: (context, state) => const BiometricSetupScreen(),
+    ),
+    GoRoute(
+      path: '/reset-password',
+      builder: (context, state) => const ResetPasswordScreen(),
     ),
     GoRoute(
       path: '/dashboard',

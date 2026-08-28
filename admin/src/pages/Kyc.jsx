@@ -26,9 +26,11 @@ import { formatDate, getBackendFileUrl } from '../utils/formatters.js';
 import { getOperatorColor, STATUS_COLORS } from '../theme/theme.js';
 import { useToast }     from '../components/ToastContext.jsx';
 
-function DocImage({ src, alt, height = 200 }) {
+function DocImage({ src, fallbackSrc, alt, height = 200 }) {
   const [err, setErr] = useState(false);
-  if (!src || err) {
+  const [useFallback, setUseFallback] = useState(false);
+  const activeSrc = useFallback ? fallbackSrc : src;
+  if (!activeSrc || err) {
     return (
       <Box sx={{
         height, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -42,9 +44,12 @@ function DocImage({ src, alt, height = 200 }) {
   return (
     <Box
       component="img"
-      src={src}
+      src={activeSrc}
       alt={alt}
-      onError={() => setErr(true)}
+      onError={() => {
+        if (!useFallback && fallbackSrc) setUseFallback(true);
+        else setErr(true);
+      }}
       sx={{ maxHeight: height, maxWidth: '100%', borderRadius: 1.5, objectFit: 'contain', display: 'block', mx: 'auto' }}
     />
   );
@@ -458,11 +463,11 @@ export default function Kyc() {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5 }}>
                   <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>Front View</Typography>
-                    <DocImage src={selected.id_front_data || getBackendFileUrl(selected.id_front_path)} alt="ID Front" />
+                    <DocImage src={getBackendFileUrl(selected.id_front_path)} fallbackSrc={selected.id_front_data} alt="ID Front" />
                   </Paper>
                   <Paper sx={{ p: 2, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>Back View</Typography>
-                    <DocImage src={selected.id_back_data || getBackendFileUrl(selected.id_back_path)} alt="ID Back" />
+                    <DocImage src={getBackendFileUrl(selected.id_back_path)} fallbackSrc={selected.id_back_data} alt="ID Back" />
                   </Paper>
                 </Box>
               </Stack>
@@ -474,10 +479,10 @@ export default function Kyc() {
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1.5fr' }, gap: 3, alignItems: 'center' }}>
                   <Paper sx={{ p: 2.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider', textAlign: 'center' }}>
                     <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1.5}>Citizen Selfie</Typography>
-                    {(selected.face_image_data || selected.face_image_path) ? (
+                    {(selected.face_image_path || selected.face_image_data) ? (
                       <Box
                         component="img"
-                        src={selected.face_image_data || getBackendFileUrl(selected.face_image_path)}
+                        src={getBackendFileUrl(selected.face_image_path) || selected.face_image_data || ''}
                         alt="Selfie"
                         sx={{ width: 140, height: 140, borderRadius: '50%', objectFit: 'cover', border: '3px solid #2563eb', mx: 'auto', display: 'block' }}
                       />

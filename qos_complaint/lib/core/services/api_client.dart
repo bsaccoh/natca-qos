@@ -84,9 +84,10 @@ class ApiClient {
         body: json.encode({'refreshToken': refreshToken}),
       ).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        final newAccess = data['accessToken'] as String?;
-        final newRefresh = data['refreshToken'] as String?;
+        final body = json.decode(res.body);
+        final payload = body['data'] ?? body;
+        final newAccess = payload['accessToken'] as String?;
+        final newRefresh = payload['refreshToken'] as String?;
         if (newAccess != null) {
           await saveTokens(
             access: newAccess,

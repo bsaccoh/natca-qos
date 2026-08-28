@@ -408,11 +408,11 @@ export default function KycSubmit() {
     return true;
   };
 
-  // Submit blocked if face check is still running or has failed.
+  // Submit allowed once face check has completed (pass or fail — admin reviews manually).
   // NIN OCR is best-effort; skip / unknown does NOT block.
   const canSubmit = !loading
     && !verifying.face && !verifying.nin
-    && faceResult && faceResult.ok === true;
+    && faceResult !== null;
 
   const submit = async () => {
     setLoading(true); setErr('');
@@ -541,9 +541,12 @@ export default function KycSubmit() {
               ? 'Running identity checks…'
               : !faceResult
                 ? 'Waiting for face verification to complete'
-                : faceResult.ok === false
-                  ? 'Face check failed — retake your photo or re-run checks above'
-                  : ''}
+                : ''}
+          </Typography>
+        )}
+        {step === STEPS.length - 1 && faceResult && !faceResult.ok && !verifying.face && (
+          <Typography variant="caption" color="warning.main" textAlign="right">
+            Face check could not be verified — admin will review manually
           </Typography>
         )}
         <Stack direction="row" justifyContent="space-between">
@@ -556,18 +559,6 @@ export default function KycSubmit() {
             </Button>
           ) : (
             <Stack direction="row" spacing={1} alignItems="center">
-              {faceResult && !faceResult.ok && !verifying.face && (
-                <Button
-                  variant="text"
-                  color="warning"
-                  size="small"
-                  disabled={loading}
-                  onClick={submit}
-                  sx={{ whiteSpace: 'nowrap' }}
-                >
-                  Submit anyway
-                </Button>
-              )}
               <Button
                 variant="contained"
                 color="success"

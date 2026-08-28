@@ -18,6 +18,12 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
   final List<String> _filters = ["All", "Open", "In Progress", "Resolved", "Closed"];
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => ref.read(complaintsProvider.notifier).fetchComplaints());
+  }
+
+  @override
   Widget build(BuildContext context) {
     final complaints = ref.watch(complaintsProvider);
 
@@ -58,16 +64,22 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
 
           // Complaints list
           Expanded(
-            child: filteredComplaints.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredComplaints.length,
-                    itemBuilder: (context, index) {
-                      final complaint = filteredComplaints[index];
-                      return _buildComplaintCard(context, complaint);
-                    },
-                  ),
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(complaintsProvider.notifier).fetchComplaints(),
+              color: AppColors.primaryBlue,
+              child: filteredComplaints.isEmpty
+                  ? ListView(
+                      children: [SizedBox(height: MediaQuery.of(context).size.height * 0.25), _buildEmptyState()],
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: filteredComplaints.length,
+                      itemBuilder: (context, index) {
+                        final complaint = filteredComplaints[index];
+                        return _buildComplaintCard(context, complaint);
+                      },
+                    ),
+            ),
           ),
         ],
       ),
@@ -118,16 +130,22 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
   }
 
   Widget _buildEmptyState() {
+    final allEmpty = ref.read(complaintsProvider).isEmpty;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.assignment_late_outlined, size: 48, color: AppColors.textLight),
+          Icon(allEmpty ? Icons.inbox_outlined : Icons.assignment_late_outlined, size: 48, color: AppColors.textLight),
           const SizedBox(height: 12),
           Text(
-            "No complaints found for '$_selectedFilter'",
+            allEmpty ? "No complaints yet" : "No complaints found for '$_selectedFilter'",
             style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
           ),
+          if (allEmpty) ...[
+            const SizedBox(height: 6),
+            Text("Pull down to refresh or report a new issue",
+                style: AppTextStyles.micro.copyWith(color: AppColors.textLight)),
+          ],
         ],
       ),
     );

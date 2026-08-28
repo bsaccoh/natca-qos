@@ -52,7 +52,7 @@ class _MainScaffoldState extends State<MainScaffold> {
       backgroundColor: AppColors.dynamicBackground,
       body: activeBody,
       bottomNavigationBar: Container(
-        height: 64 + MediaQuery.of(context).padding.bottom,
+        height: 80 + MediaQuery.of(context).padding.bottom,
         decoration: BoxDecoration(
           color: AppColors.dynamicCard,
           border: const Border(top: BorderSide(color: AppColors.border, width: 1.0)),

@@ -183,11 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Password reset OTP reference triggered")),
-                      );
-                    },
+                    onPressed: () => context.push('/reset-password'),
                     child: Text(
                       "Forgot Password?",
                       style: AppTextStyles.small.copyWith(color: AppColors.primaryBlue, fontWeight: FontWeight.bold),

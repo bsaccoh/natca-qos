@@ -5,6 +5,7 @@ import { randomUUID }  from 'crypto';
 import fs              from 'fs';
 import { z }           from 'zod';
 import sharp           from 'sharp';
+import Tesseract       from 'tesseract.js';
 import { asyncHandler }        from '../../utils/asyncHandler.js';
 import { ok }                  from '../../utils/http.js';
 import { authenticate, optionalAuth } from '../../middleware/auth.js';
@@ -190,6 +191,105 @@ router.post(
     } finally {
       try { fs.unlinkSync(idPath); } catch {}
       try { fs.unlinkSync(selfiePath); } catch {}
+    }
+  })
+);
+
+/* ── NIN OCR verification ────────────────────────────────────────────────
+   Runs Tesseract OCR on the ID front image and checks if the NIN appears.
+   Best-effort: OCR on phone-camera photos often fails.                   */
+function fixOcrSubstitutions(s) {
+  return s.toUpperCase()
+    .replace(/0/g, 'O').replace(/1/g, 'I').replace(/8/g, 'B')
+    .replace(/5/g, 'S').replace(/6/g, 'G').replace(/2/g, 'Z');
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+  return dp[m][n];
+}
+
+function fuzzyContains(text, nin, maxDist = 2) {
+  const upper = text.toUpperCase();
+  for (let i = 0; i <= upper.length - nin.length; i++) {
+    if (levenshtein(upper.slice(i, i + nin.length), nin) <= maxDist) return true;
+  }
+  return false;
+}
+
+function extractExpiryDate(text) {
+  const patterns = [
+    /(\d{1,2})[.\-/](\d{1,2})[.\-/](20\d{2})/g,
+    /(20\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})/g,
+  ];
+  const dates = [];
+  for (const line of text.split('\n')) {
+    const isExpiry = /expir|exp\b|valid.*until|valid.*to|date.*exp/i.test(line);
+    for (const pat of patterns) {
+      pat.lastIndex = 0;
+      let m;
+      while ((m = pat.exec(line)) !== null) {
+        let day, month, year;
+        if (/^20\d{2}$/.test(m[1])) { year = +m[1]; month = +m[2]; day = +m[3]; }
+        else { day = +m[1]; month = +m[2]; year = +m[3]; }
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 2024 && year <= 2040) {
+          dates.push({ iso: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, isExpiry, year });
+        }
+      }
+    }
+  }
+  const expiry = dates.find(d => d.isExpiry) || dates.find(d => d.year > new Date().getFullYear());
+  return expiry?.iso || null;
+}
+
+router.post(
+  '/verify-nin',
+  compareUpload.fields([{ name: 'id_front', maxCount: 1 }]),
+  asyncHandler(async (req, res) => {
+    const idPath = req.files?.id_front?.[0]?.path;
+    const nin = (req.body.nin || '').toUpperCase().replace(/[^A-Z]/g, '');
+    if (!idPath) return res.status(400).json({ error: 'id_front file is required.' });
+
+    try {
+      const { data } = await Tesseract.recognize(idPath, 'eng', { logger: () => {} });
+      const text = data?.text || '';
+
+      if (!text.trim()) {
+        return ok(res, { ok: null, matched: false, expiry: null,
+          message: 'No text readable on the ID — skipping NIN check.' });
+      }
+
+      const expiry = extractExpiryDate(text);
+
+      if (!nin || nin.length !== 8) {
+        return ok(res, { ok: null, matched: false, expiry,
+          message: 'NIN not provided or invalid — skipped.' });
+      }
+
+      const corrected = fixOcrSubstitutions(text);
+      const runs = corrected.match(/[A-Z]{4,}/g) || [];
+      const exact = runs.some(r => r.includes(nin));
+      if (exact) {
+        return ok(res, { ok: true, matched: true, expiry, message: `NIN found on ID (${nin})` });
+      }
+      if (fuzzyContains(corrected, nin, 2) || fuzzyContains(text.toUpperCase(), nin, 2)) {
+        return ok(res, { ok: true, matched: true, expiry, message: `NIN found on ID (${nin}, fuzzy match)` });
+      }
+
+      return ok(res, { ok: null, matched: false, expiry,
+        message: runs.length
+          ? 'Could not confidently match NIN on ID (OCR quality may be low). Admin will verify manually.'
+          : 'No letter sequences readable on the ID — skipping NIN check.' });
+    } finally {
+      try { fs.unlinkSync(idPath); } catch {}
     }
   })
 );

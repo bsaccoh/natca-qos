@@ -211,7 +211,7 @@ class SubmitResult {
 
 // ── 3. COMPLAINTS LIST DATABASE STATE ──────────────────────────────────────
 class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
-  ComplaintsNotifier() : super(_initialMockComplaints()) {
+  ComplaintsNotifier() : super([]) {
     _restoreOfflineQueue().then((_) => fetchComplaints());
   }
 
@@ -222,7 +222,6 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
     final queued = queuedStrs
         .map((s) => ComplaintItem.fromJson(json.decode(s)))
         .toList();
-    // Prepend queued items, removing any duplicates already in mock state
     final existingIds = state.map((e) => e.id).toSet();
     final newItems = queued.where((e) => !existingIds.contains(e.id)).toList();
     if (newItems.isNotEmpty) state = [...newItems, ...state];
@@ -230,35 +229,68 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
 
   Future<void> fetchComplaints() async {
     try {
-      final response = await apiClient.get('/complaints', auth: true).timeout(const Duration(milliseconds: 3000));
+      final response = await apiClient.get('/complaints', auth: true).timeout(const Duration(seconds: 10));
+      print('FETCH_COMPLAINTS status=${response.statusCode} body=${response.body.length > 500 ? response.body.substring(0, 500) : response.body}');
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data != null && data['rows'] != null) {
-          final List rows = data['rows'];
-          final List<ComplaintItem> loaded = [];
-          for (var item in rows) {
-            loaded.add(ComplaintItem(
-              id: item['complaint_id'] ?? 0,
-              reference: item['complaint_ref'] ?? '',
-              operatorId: item['operator_id'] ?? 0,
-              operatorName: _getOperatorName(item['operator_id']),
-              issueType: item['issue_type'] ?? 'No Signal',
-              description: item['description'] ?? '',
-              district: item['district'] ?? 'Kenema',
-              areaDetail: item['area_detail'] ?? '',
-              lat: double.tryParse(item['lat']?.toString() ?? '8.11') ?? 8.11,
-              lng: double.tryParse(item['lng']?.toString() ?? '-11.19') ?? -11.19,
-              status: item['status'] ?? 'NEW',
-              createdAt: item['created_at'] ?? '',
-            ));
-          }
-          if (loaded.isNotEmpty) {
-            state = loaded;
-          }
+        final body = json.decode(response.body);
+        final payload = body['data'] ?? body;
+        final List? rows = payload is List ? payload as List : (payload['rows'] as List?);
+        if (rows != null) {
+          final List<ComplaintItem> loaded = rows.map((item) {
+            final cid = _toInt(item['complaint_id']);
+            final oid = _toInt(item['operator_id']);
+            return ComplaintItem(
+              id: cid,
+              reference: item['complaint_ref']?.toString() ?? '',
+              operatorId: oid,
+              operatorName: item['operator_name']?.toString() ?? _getOperatorName(oid),
+              issueType: item['issue_type']?.toString() ?? '',
+              description: item['description']?.toString() ?? '',
+              district: item['district']?.toString() ?? '',
+              areaDetail: item['area_detail']?.toString() ?? '',
+              lat: _toDouble(item['latitude']),
+              lng: _toDouble(item['longitude']),
+              status: item['status']?.toString() ?? 'NEW',
+              priority: item['priority']?.toString() ?? 'NORMAL',
+              createdAt: _formatDate(item['created_at']),
+              assignedOfficer: item['assigned_officer_name']?.toString(),
+            );
+          }).toList();
+          print('FETCH_COMPLAINTS parsed ${loaded.length} complaints');
+          final queued = state.where((c) => c.status == 'QUEUED').toList();
+          state = [...queued, ...loaded];
+        } else {
+          print('FETCH_COMPLAINTS rows was null, payload keys: ${payload is Map ? (payload as Map).keys.toList() : 'not a map'}');
         }
       }
+    } catch (e) {
+      print('FETCH_COMPLAINTS error: $e');
+    }
+  }
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  static double _toDouble(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
+  static String _formatDate(dynamic v) {
+    if (v == null) return '';
+    try {
+      final dt = DateTime.parse(v.toString());
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      final h = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+      return '${dt.day} ${months[dt.month - 1]} ${dt.year}, ${h.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $ampm';
     } catch (_) {
-      // Offline fallback: keep pre-populated mock complaints
+      return v.toString();
     }
   }
 
@@ -410,6 +442,10 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
     return allSynced;
   }
 
+  void clear() {
+    state = [];
+  }
+
   void updateComplaintStatus(int id, String newStatus) {
     state = state.map((c) {
       if (c.id == id) {
@@ -455,121 +491,6 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
       case 4: return "Sierra Tel";
       default: return "Other";
     }
-  }
-
-  static List<ComplaintItem> _initialMockComplaints() {
-    return [
-      ComplaintItem(
-        id: 1,
-        reference: "CN123456789",
-        operatorId: 2,
-        operatorName: "Africell",
-        issueType: "Call Drops",
-        description: "Calls keep dropping even when I have full signal.",
-        district: "Kenema",
-        areaDetail: "12 Bockarie Gbay Street",
-        lat: 8.1189,
-        lng: -11.1963,
-        status: "IN_PROGRESS",
-        priority: "HIGH",
-        createdAt: "11 Jul 2025, 10:30 AM",
-        assignedOfficer: "NatCA Inspector Kamara",
-        adminNotes: ["Dispatched field inspector to Kenema cell tower #4", "Africell tech team alerted of packet loss"],
-      ),
-      ComplaintItem(
-        id: 2,
-        reference: "CN123456790",
-        operatorId: 4,
-        operatorName: "Sierra Tel",
-        issueType: "Slow Internet",
-        description: "LTE speeds are extremely low in the afternoon.",
-        district: "Western Area Urban",
-        areaDetail: "Siaka Stevens Street, Freetown",
-        lat: 8.484,
-        lng: -13.229,
-        status: "NEW",
-        priority: "MEDIUM",
-        createdAt: "09 Jul 2025, 02:15 PM",
-        assignedOfficer: "Unassigned",
-        adminNotes: ["Pending initial regulatory triage"],
-      ),
-      ComplaintItem(
-        id: 3,
-        reference: "CN123456791",
-        operatorId: 2,
-        operatorName: "Orange",
-        issueType: "Mobile Money",
-        description: "Failed Cash-Out transaction of SLE 450. Money deducted but cash not dispensed.",
-        district: "Bo District",
-        areaDetail: "Bo Central Market",
-        lat: 7.9647,
-        lng: -11.7383,
-        status: "IN_PROGRESS",
-        priority: "EMERGENCY",
-        createdAt: "08 Jul 2025, 11:20 AM",
-        billingSubCategory: "Failed Transfer / Cash Out",
-        transactionRef: "OM-88392019",
-        disputedAmount: 450.00,
-        transactionDate: "08 Jul 2025",
-        assignedOfficer: "FinTech Compliance Officer Saccoh",
-        adminNotes: ["Escalated to Orange Money Disputes Desk", "Reconciliation statement requested from bank gateway"],
-      ),
-      ComplaintItem(
-        id: 4,
-        reference: "CN123456792",
-        operatorId: 2,
-        operatorName: "Orange",
-        issueType: "No Signal",
-        description: "Zero reception inside buildings on main street.",
-        district: "Kenema",
-        areaDetail: "Gbangbatoke",
-        lat: 8.0830,
-        lng: -11.3120,
-        status: "RESOLVED",
-        priority: "LOW",
-        createdAt: "05 Jul 2025, 09:45 AM",
-        assignedOfficer: "Eng. Sesay",
-        adminNotes: ["Orange restored secondary BTS repeater node"],
-      ),
-      ComplaintItem(
-        id: 5,
-        reference: "CN123456793",
-        operatorId: 4,
-        operatorName: "Qcell",
-        issueType: "Billing Dispute",
-        description: "Data bundle expired after 2 hours despite 10GB remaining.",
-        district: "Makeni",
-        areaDetail: "Station Road, Makeni",
-        lat: 8.8856,
-        lng: -12.0439,
-        status: "ESCALATED",
-        priority: "HIGH",
-        createdAt: "03 Jul 2025, 04:10 PM",
-        billingSubCategory: "Unjust Data Depletion",
-        transactionRef: "QC-992014",
-        disputedAmount: 120.00,
-        transactionDate: "03 Jul 2025",
-        assignedOfficer: "NatCA Senior Legal Counsel",
-        adminNotes: ["Operator failed 48h SLA response deadline", "Formal notice of regulatory query dispatched"],
-      ),
-      ComplaintItem(
-        id: 6,
-        reference: "CN123456794",
-        operatorId: 4,
-        operatorName: "Qcell",
-        issueType: "No Internet",
-        description: "Data service has been completely offline for 24h.",
-        district: "Kenema",
-        areaDetail: "Kenema City Centre",
-        lat: 8.1150,
-        lng: -11.2010,
-        status: "CLOSED",
-        priority: "MEDIUM",
-        createdAt: "01 Jul 2025, 08:00 AM",
-        assignedOfficer: "Eng. Bangura",
-        adminNotes: ["Fiber optic cut repaired by Qcell core engineering"],
-      ),
-    ];
   }
 }
 
