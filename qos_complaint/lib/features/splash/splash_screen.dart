@@ -62,23 +62,24 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             
             // Main content column
             SafeArea(
-              child: Column(
-                children: [
-                  const SizedBox(height: 40),
-                  // Signal Tower Graphic
-                  Expanded(
-                    child: Center(
-                      child: AnimatedBuilder(
-                        animation: _waveController,
-                        builder: (context, child) {
-                          return CustomPaint(
-                            size: const Size(200, 220),
-                            painter: _SignalTowerPainter(progress: _waveController.value),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const SizedBox(height: 40),
+                        // Signal Tower Graphic
+                        AnimatedBuilder(
+                          animation: _waveController,
+                          builder: (context, child) {
+                            return CustomPaint(
+                              size: const Size(200, 220),
+                              painter: _SignalTowerPainter(progress: _waveController.value),
+                            );
+                          },
+                        ),
 
                   // Branding Texts
                   RichText(
@@ -199,7 +200,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       ],
                     ),
                   ),
-                ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
