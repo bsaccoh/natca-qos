@@ -143,4 +143,51 @@ router.get('/analytics', asyncHandler(async (req, res) => {
   });
 }));
 
+/* ── Operator Webhooks & Ticket Synchronization ──────────────────────────── */
+
+// List operator webhooks
+router.get('/webhooks', asyncHandler(async (req, res) => {
+  const { getOperatorWebhooks } = await import('../../services/webhook.service.js');
+  ok(res, await getOperatorWebhooks(req.user.operatorId));
+}));
+
+// Register / update operator webhook
+router.post('/webhooks', asyncHandler(async (req, res) => {
+  const { targetUrl, secretKey, events } = z.object({
+    targetUrl: z.string().url(),
+    secretKey: z.string().optional(),
+    events:    z.array(z.string()).optional(),
+  }).parse(req.body);
+
+  const { setOperatorWebhook } = await import('../../services/webhook.service.js');
+  ok(res, await setOperatorWebhook({
+    operatorId: req.user.operatorId,
+    targetUrl,
+    secretKey,
+    events,
+  }));
+}));
+
+// Inbound sync from Operator ticketing system (Jira / ServiceNow / Remedy)
+router.post('/sync-ticket', asyncHandler(async (req, res) => {
+  const { complaintRef, externalTicketId, status, rcaNote } = z.object({
+    complaintRef:     z.string().min(1),
+    externalTicketId: z.string().optional(),
+    status:           z.string().optional(),
+    rcaNote:          z.string().optional(),
+  }).parse(req.body);
+
+  const { syncInboundTicket } = await import('../../services/webhook.service.js');
+  const io = req.app.get('io');
+  const result = await syncInboundTicket({
+    operatorId: req.user.operatorId,
+    complaintRef,
+    externalTicketId,
+    status,
+    rcaNote,
+    io,
+  });
+  ok(res, result);
+}));
+
 export default router;

@@ -22,7 +22,8 @@ import VpnKeyIcon            from '@mui/icons-material/VpnKey';
 import FolderLockIcon        from '@mui/icons-material/FolderShared';
 import BuildIcon             from '@mui/icons-material/Build';
 import PowerSettingsNewIcon  from '@mui/icons-material/PowerSettingsNew';
-import { get, del, put }     from '../api/client.js';
+import PhonelinkLockIcon     from '@mui/icons-material/PhonelinkLock';
+import { get, del, put, patch } from '../api/client.js';
 import { useAuth }           from '../auth/AuthContext.jsx';
 import { useToast }          from '../components/ToastContext.jsx';
 import PageHeader            from '../components/PageHeader.jsx';
@@ -831,6 +832,190 @@ function SettingsTab() {
   );
 }
 
+/* ── TAB 5 — SIM Cap & Fraud Sentinel ── */
+function SimFraudTab() {
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  const [ninSearch, setNinSearch] = useState('');
+  const [auditResult, setAuditResult] = useState(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const { showToast } = useToast();
+
+  const loadAlerts = useCallback(async () => {
+    setLoading(true);
+    setErr('');
+    try {
+      const res = await get('/sim/fraud-alerts?status=OPEN');
+      setAlerts(res.data?.rows || []);
+    } catch {
+      setErr('Failed to load SIM fraud alerts.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadAlerts(); }, [loadAlerts]);
+
+  const handleAudit = async (e) => {
+    e.preventDefault();
+    if (!ninSearch.trim()) return;
+    setAuditLoading(true);
+    setAuditResult(null);
+    try {
+      const res = await get(`/sim/audit/${encodeURIComponent(ninSearch.trim())}`);
+      setAuditResult(res.data);
+    } catch (error) {
+      showToast(error?.response?.data?.error || 'Failed to audit NIN', 'error');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const handleResolve = async (alertId) => {
+    try {
+      await patch(`/sim/fraud-alerts/${alertId}`, { status: 'CLEARED', resolutionNote: 'Audited and cleared by regulator' });
+      showToast('Fraud alert cleared', 'success');
+      loadAlerts();
+    } catch {
+      showToast('Failed to resolve alert', 'error');
+    }
+  };
+
+  return (
+    <Box>
+      {/* NIN Audit Quick-Search Box */}
+      <Paper sx={{ p: 2.5, mb: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+        <Typography variant="subtitle1" fontWeight={700} mb={1}>National NIN Multi-SIM Registry Cross-Check</Typography>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Audits real-time SIM registrations across all operators (Orange, Africell, QCell). Enforces statutory maximum cap (4 SIMs per citizen NIN).
+        </Typography>
+        <Box component="form" onSubmit={handleAudit} sx={{ display: 'flex', gap: 1.5, maxWidth: 540 }}>
+          <TextField
+            size="small"
+            placeholder="Enter Citizen National ID (NIN) e.g. SL-NIN-99281"
+            fullWidth
+            value={ninSearch}
+            onChange={(e) => setNinSearch(e.target.value)}
+          />
+          <Button variant="contained" type="submit" disabled={auditLoading || !ninSearch.trim()} sx={{ minWidth: 120 }}>
+            {auditLoading ? <CircularProgress size={20} color="inherit" /> : 'Audit NIN'}
+          </Button>
+        </Box>
+
+        {auditResult && (
+          <Box sx={{ mt: 2.5, p: 2, bgcolor: alpha(auditResult.is_compliant ? '#10b981' : '#ef4444', 0.05), border: '1px solid', borderColor: auditResult.is_compliant ? 'success.main' : 'error.main', borderRadius: 1.5 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+              <Typography variant="subtitle2" fontWeight={700}>
+                NIN: {auditResult.nin} · Total Registered SIMs: <strong>{auditResult.total_sims}</strong> / {auditResult.max_allowed} max
+              </Typography>
+              <Chip
+                label={auditResult.is_compliant ? 'COMPLIANT' : 'CAP BREACH / FRAUD ALERT'}
+                color={auditResult.is_compliant ? 'success' : 'error'}
+                size="small"
+                sx={{ fontWeight: 800 }}
+              />
+            </Stack>
+
+            {auditResult.violations?.length > 0 && (
+              <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                {auditResult.violations.map((v, i) => (
+                  <Typography key={i} variant="caption" color="error.main" fontWeight={600}>
+                    ⚠️ {v.message}
+                  </Typography>
+                ))}
+              </Stack>
+            )}
+
+            <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase">Registered Active Numbers:</Typography>
+            <TableContainer sx={{ mt: 1 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Phone</TableCell>
+                    <TableCell>Operator</TableCell>
+                    <TableCell>ICCID</TableCell>
+                    <TableCell>Registered Name</TableCell>
+                    <TableCell>Date</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(auditResult.registrations || []).map((r) => (
+                    <TableRow key={r.kyc_id}>
+                      <TableCell sx={{ fontWeight: 600 }}>{r.phone}</TableCell>
+                      <TableCell><Chip label={r.operator_name || 'MNO'} size="small" variant="outlined" /></TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: 11 }}>{r.iccid || '-'}</TableCell>
+                      <TableCell>{r.first_name} {r.last_name}</TableCell>
+                      <TableCell>{new Date(r.created_at).toLocaleDateString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        )}
+      </Paper>
+
+      {/* Flagged Alerts Table */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.5}>
+        <Typography variant="h6" fontWeight={700}>
+          Regulatory SIM Cap Violations & Fraud Alerts <Chip label={alerts.length} size="small" color="error" sx={{ ml: 1, fontWeight: 800 }} />
+        </Typography>
+        <Button size="small" startIcon={<RefreshIcon />} onClick={loadAlerts}>Refresh</Button>
+      </Stack>
+
+      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress /></Box>
+      ) : alerts.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+          <CheckCircleIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+          <Typography variant="subtitle1" fontWeight={700}>No active SIM fraud or cap alerts</Typography>
+          <Typography variant="body2" color="text.secondary">All audited NIN records are compliant with the 4-SIM statutory limit.</Typography>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+          <Table size="small">
+            <TableHead sx={{ bgcolor: (t) => alpha(t.palette.error.main, 0.04) }}>
+              <TableRow sx={{ '& th': { fontWeight: 700 } }}>
+                <TableCell>NIN</TableCell>
+                <TableCell>Alert Type</TableCell>
+                <TableCell>Severity</TableCell>
+                <TableCell align="right">Active SIMs</TableCell>
+                <TableCell>Triggered</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {alerts.map((a) => (
+                <TableRow key={a.alert_id} hover>
+                  <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{a.nin}</TableCell>
+                  <TableCell>
+                    <Chip label={a.alert_type?.replace(/_/g, ' ')} size="small" variant="outlined" color="error" sx={{ fontSize: 11, fontWeight: 700 }} />
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={a.severity} size="small" color={a.severity === 'CRITICAL' ? 'error' : 'warning'} sx={{ fontSize: 10, fontWeight: 800 }} />
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 800, color: 'error.main' }}>
+                    {a.total_sims} / 4
+                  </TableCell>
+                  <TableCell>{timeSince(a.created_at)}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" variant="outlined" color="success" onClick={() => handleResolve(a.alert_id)} sx={{ textTransform: 'none' }}>
+                      Clear Alert
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Box>
+  );
+}
+
 /* ── MAIN — SecurityCenter ── */
 export default function SecurityCenter() {
   const [tab, setTab] = useState(0);
@@ -841,6 +1026,7 @@ export default function SecurityCenter() {
     { label: 'Login History',        icon: <LoginIcon fontSize="small" /> },
     { label: 'Roles & Permissions',  icon: <GridViewIcon fontSize="small" /> },
     { label: 'System Settings',      icon: <SettingsIcon fontSize="small" /> },
+    { label: 'SIM Cap & Fraud',      icon: <PhonelinkLockIcon fontSize="small" /> },
   ];
 
   return (
@@ -848,7 +1034,7 @@ export default function SecurityCenter() {
       <PageHeader
         icon={<SecurityIcon />}
         title="Administration & Security Center"
-        subtitle="Manage active sessions, audit trails, role permission matrix, and system configurations"
+        subtitle="Manage active sessions, audit trails, role permission matrix, multi-SIM cap fraud, and system configurations"
       />
 
       {/* Tabs */}
@@ -866,6 +1052,7 @@ export default function SecurityCenter() {
       {tab === 2 && <LoginHistoryTab />}
       {tab === 3 && <PermissionsTab />}
       {tab === 4 && <SettingsTab />}
+      {tab === 5 && <SimFraudTab />}
     </Box>
   );
 }

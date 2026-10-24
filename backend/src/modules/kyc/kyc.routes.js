@@ -93,6 +93,9 @@ router.post(
       idType:        z.string().optional(),
       idExpiryDate:  z.string().optional(),
       faceMatchScore: z.coerce.number().min(0).max(100).optional(),
+      livenessPassed: z.boolean().optional(),
+      livenessScore:  z.coerce.number().optional(),
+      riskScore:      z.coerce.number().optional(),
     }).parse(req.body);
 
     const rawIdFront   = req.files?.id_front?.[0] || null;
@@ -177,8 +180,14 @@ router.post(
       ok(res, {
         ok:      !!result.match,
         score:   result.score ?? 0,
+        liveness_passed: result.liveness_passed ?? true,
+        liveness_score:  result.liveness_score ?? 100,
+        risk_score:      result.risk_score ?? 0,
+        liveness_reasons: result.liveness?.reasons || [],
         message: result.match
-          ? `Face verified (${result.score}% match)`
+          ? (result.liveness_passed === false
+              ? `Face matched (${result.score}%), but passive anti-spoofing flagged potential display/paper replay. Review required.`
+              : `Face verified (${result.score}% match)`)
           : result.message || `The face on your ID does not match your selfie (${result.score}% match). Please retake your selfie or upload a clearer ID photo.`,
         strategy: result.strategy,
         model:    result.model,

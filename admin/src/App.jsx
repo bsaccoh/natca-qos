@@ -18,6 +18,7 @@ const Users = lazy(() => import('./pages/Users.jsx'));
 const Kyc = lazy(() => import('./pages/Kyc.jsx'));
 const Analytics = lazy(() => import('./pages/Analytics.jsx'));
 const SpeedAnalytics = lazy(() => import('./pages/SpeedAnalytics.jsx'));
+const DriveTest = lazy(() => import('./pages/DriveTest.jsx'));
 const ContentManager = lazy(() => import('./pages/ContentManager.jsx'));
 const Incidents = lazy(() => import('./pages/Incidents.jsx'));
 const Ussd = lazy(() => import('./pages/Ussd.jsx'));
@@ -79,6 +80,7 @@ export default function App() {
                 <Route path="kyc" element={<Kyc />} />
                 <Route path="analytics" element={<Analytics />} />
                 <Route path="speed" element={<SpeedAnalytics />} />
+                <Route path="drivetest" element={<DriveTest />} />
                 <Route path="incidents" element={<Incidents />} />
                 <Route path="content" element={<ContentManager />} />
                 <Route

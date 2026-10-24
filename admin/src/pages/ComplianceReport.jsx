@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Paper, Typography, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, Stack, IconButton, Button,
-  LinearProgress, Alert, alpha,
+  LinearProgress, Alert, alpha, Grid,
 } from '@mui/material';
 import RefreshIcon  from '@mui/icons-material/Refresh';
 import PrintIcon    from '@mui/icons-material/Print';
@@ -88,6 +88,37 @@ export default function ComplianceReport() {
           <Typography variant="body2" color="text.secondary">Generated: {new Date().toLocaleString()}</Typography>
         </Box>
 
+        {/* Summary KPI Cards */}
+        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={4}>
+            <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase">Total SLA Breaches</Typography>
+              <Typography variant="h4" fontWeight={800} color="error.main" sx={{ mt: 0.5 }}>
+                {rows.reduce((acc, r) => acc + Number(r.sla_breach_count || 0), 0)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">Regulatory deadline violations across all operators</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase">Estimated Regulatory Fines</Typography>
+              <Typography variant="h4" fontWeight={800} color="warning.main" sx={{ mt: 0.5 }}>
+                SLE {(rows.reduce((acc, r) => acc + Number(r.sla_breach_count || 0), 0) * 2500).toLocaleString()}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">Statutory enforcement rate (SLE 2,500 / SLA breach)</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase">Top Performing Operator</Typography>
+              <Typography variant="h4" fontWeight={800} color="success.main" sx={{ mt: 0.5 }}>
+                {rows.length > 0 ? [...rows].sort((a,b) => b.resolution_rate - a.resolution_rate)[0]?.operator_name : 'N/A'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">Highest complaint resolution & lowest breach rate</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
         <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: (t) => alpha(t.palette.primary.main, 0.04) }}>
@@ -99,6 +130,7 @@ export default function ComplianceReport() {
                 <TableCell align="right">Avg Resolution</TableCell>
                 <TableCell align="right">SLA Breaches</TableCell>
                 <TableCell sx={{ minWidth: 140 }}>SLA Breach Rate</TableCell>
+                <TableCell align="right">Est. Penalty (SLE)</TableCell>
                 <TableCell align="right">Avg CSAT</TableCell>
                 <TableCell>Grade</TableCell>
               </TableRow>
@@ -106,7 +138,7 @@ export default function ComplianceReport() {
             <TableBody>
               {rows.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={9} sx={{ textAlign: 'center', py: 6 }}>
+                  <TableCell colSpan={10} sx={{ textAlign: 'center', py: 6 }}>
                     <Typography color="text.secondary">No compliance metrics available</Typography>
                   </TableCell>
                 </TableRow>
@@ -118,6 +150,7 @@ export default function ComplianceReport() {
                             : r.resolution_rate >= 40                            ? 'D'
                             :                                                      'F';
                 const gradeColor = { A: 'success', B: 'success', C: 'warning', D: 'warning', F: 'error' }[grade];
+                const estPenalty = Number(r.sla_breach_count || 0) * 2500;
                 return (
                   <TableRow key={r.operator_id} hover>
                     <TableCell>
@@ -136,6 +169,11 @@ export default function ComplianceReport() {
                     </TableCell>
                     <TableCell>
                       <ScoreBar value={r.sla_breach_pct} color={r.sla_breach_pct > 15 ? 'error' : r.sla_breach_pct > 5 ? 'warning' : 'success'} />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" fontWeight={700} color={estPenalty > 0 ? 'warning.main' : 'text.secondary'}>
+                        {estPenalty > 0 ? `SLE ${estPenalty.toLocaleString()}` : 'SLE 0'}
+                      </Typography>
                     </TableCell>
                     <TableCell align="right">
                       {r.avg_csat != null ? (

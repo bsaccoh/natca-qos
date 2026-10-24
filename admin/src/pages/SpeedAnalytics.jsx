@@ -79,7 +79,7 @@ export default function SpeedAnalytics() {
           <Box sx={{ height: 'calc(100% - 36px)', borderRadius: 1.5, overflow: 'hidden', position: 'relative' }}>
             <MapContainer center={[8.460555, -11.779889]} zoom={7} style={{ height: '100%', width: '100%', zIndex: 1 }}>
               <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution="&copy; OpenStreetMap contributors"
               />
               {mapData.map((marker) => (

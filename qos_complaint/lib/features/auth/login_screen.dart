@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/providers/state_providers.dart';
 import '../../core/auth/auth_notifier.dart';
 import '../../core/models/user_model.dart';
 import '../../core/services/api_client.dart';
+import '../../core/services/connectivity_service.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -78,9 +80,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       print('LOGIN error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Network error. Check your connection.')),
-        );
+        final prefs = await SharedPreferences.getInstance();
+        final cachedJson = prefs.getString('current_user');
+        if (cachedJson != null) {
+          final cachedUser = UserModel.fromJson(json.decode(cachedJson));
+          await ref.read(userProvider.notifier).login(cachedUser);
+          authNotifier.setAuthenticated();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Offline mode — using cached profile. Complaints will sync when online.'),
+                duration: Duration(seconds: 4),
+              ),
+            );
+            context.go('/dashboard');
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Network error. Log in online at least once to enable offline mode.')),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _loading = false);

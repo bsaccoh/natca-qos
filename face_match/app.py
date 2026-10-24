@@ -84,9 +84,78 @@ def cosine_distance_to_score(distance: float) -> int:
     return round(score * 100)
 
 
+def check_passive_liveness(image_path: str) -> dict:
+    """Analyze selfie for screen replay, printed paper spoofing, and excessive blur."""
+    import cv2
+    img = cv2.imread(image_path)
+    if img is None:
+        return {"passed": False, "score": 0, "reasons": ["Unreadable image"], "blur_score": 0.0}
+
+    # 1. Blur evaluation using Laplacian variance
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+
+    # 2. 2D FFT Moiré pattern detection (typical of LCD/OLED display photos)
+    h, w = gray.shape
+    dft = np.fft.fft2(gray)
+    dft_shift = np.fft.fftshift(dft)
+    magnitude_spectrum = 20 * np.log(np.abs(dft_shift) + 1e-8)
+    crow, ccol = h // 2, w // 2
+    center_box = magnitude_spectrum[max(0, crow - 25):min(h, crow + 25), max(0, ccol - 25):min(w, ccol + 25)]
+    center_energy = float(np.mean(center_box))
+    total_energy = float(np.mean(magnitude_spectrum))
+    high_freq_ratio = total_energy / (center_energy + 1e-6)
+
+    # 3. Saturation & Color distribution check
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    sat_std = float(np.std(hsv[:, :, 1]))
+
+    score = 100
+    reasons = []
+
+    # Laplacian threshold: < 60 is heavily blurred or poor fake
+    if laplacian_var < 60.0:
+        score -= 35
+        reasons.append("Image is excessively blurry")
+    elif laplacian_var < 100.0:
+        score -= 15
+
+    # High frequency ratio > 0.85 indicates artificial display raster
+    if high_freq_ratio > 0.88:
+        score -= 30
+        reasons.append("High-frequency screen moiré pattern detected (suspected display photo)")
+
+    # Washed-out paper prints have low saturation variance
+    if sat_std < 18.0:
+        score -= 25
+        reasons.append("Unnatural chromaticity distribution (suspected printed photocopy)")
+
+    liveness_score = max(0, min(100, score))
+    return {
+        "passed": liveness_score >= 60,
+        "score": liveness_score,
+        "blur_score": round(laplacian_var, 2),
+        "reasons": reasons,
+    }
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/liveness")
+async def evaluate_liveness(image: UploadFile = File(...)):
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        ext = os.path.splitext(image.filename or "selfie.jpg")[1] or ".jpg"
+        img_path = os.path.join(tmp_dir, f"target{ext}")
+        with open(img_path, "wb") as f:
+            shutil.copyfileobj(image.file, f)
+        result = check_passive_liveness(img_path)
+        return result
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @app.post("/compare")
@@ -154,8 +223,27 @@ async def compare_faces(
                 logger.warning("Strategy %s failed: %s", strat["label"], e)
                 continue
 
+        liveness_data = check_passive_liveness(selfie_path)
+
         if best_result:
             best_result["match"] = best_result["match"] or best_result["score"] >= MATCH_THRESHOLD
+            best_result["liveness"] = liveness_data
+            best_result["liveness_passed"] = liveness_data["passed"]
+            best_result["liveness_score"] = liveness_data["score"]
+
+            # Risk score: 0 (safe) to 100 (high risk)
+            risk = 0.0
+            if not best_result["match"]:
+                risk += 50.0
+            else:
+                risk += (100.0 - best_result["score"]) * 0.4
+
+            if not liveness_data["passed"]:
+                risk += 40.0
+            else:
+                risk += (100.0 - liveness_data["score"]) * 0.3
+
+            best_result["risk_score"] = round(min(100.0, max(0.0, risk)), 2)
             return best_result
 
         return {
@@ -165,6 +253,10 @@ async def compare_faces(
             "threshold": 0.68,
             "strategy": "none",
             "model": MODEL_NAME,
+            "liveness": liveness_data,
+            "liveness_passed": liveness_data["passed"],
+            "liveness_score": liveness_data["score"],
+            "risk_score": 90.0,
             "message": "Could not detect a face in the ID image. Please upload a clearer photo.",
             "errors": errors[:3],
         }

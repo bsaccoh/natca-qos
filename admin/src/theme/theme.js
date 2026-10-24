@@ -1,4 +1,4 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, alpha } from '@mui/material/styles';
 
 export const OPERATOR_COLORS = {
   'Orange': '#ff7900',
@@ -62,23 +62,34 @@ export const ROLE_COLORS = {
   CITIZEN: '#10b981',
 };
 
+export const CHART_PALETTE = [
+  '#3b82f6', // Electric Blue
+  '#10b981', // Emerald
+  '#f59e0b', // Amber
+  '#a855f7', // Purple
+  '#06b6d4', // Cyan
+  '#ef4444', // Red
+  '#ec4899', // Pink
+  '#84cc16', // Lime
+];
+
 const common = {
-  shape: { borderRadius: 8 },
+  shape: { borderRadius: 10 },
   typography: {
-    fontFamily: '"Inter", "Segoe UI", Roboto, system-ui, sans-serif',
+    fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     fontSize: 14,
-    h1: { fontWeight: 700, fontSize: '2.4rem', letterSpacing: '-0.02em', lineHeight: 1.2 },
-    h2: { fontWeight: 700, fontSize: '1.9rem', letterSpacing: '-0.02em', lineHeight: 1.2 },
-    h3: { fontWeight: 700, fontSize: '1.6rem', letterSpacing: '-0.01em', lineHeight: 1.3 },
-    h4: { fontWeight: 600, fontSize: '1.35rem', letterSpacing: '-0.01em' },
-    h5: { fontWeight: 600, fontSize: '1.15rem', letterSpacing: '-0.01em' },
-    h6: { fontWeight: 600, fontSize: '1.0rem', letterSpacing: '0em' },
-    body1: { fontSize: '0.885rem', lineHeight: 1.5 },
-    body2: { fontSize: '0.815rem', lineHeight: 1.4 },
-    subtitle1: { fontWeight: 600, fontSize: '0.925rem' },
+    h1: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, fontSize: '2.4rem', letterSpacing: '-0.025em', lineHeight: 1.2 },
+    h2: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, fontSize: '1.95rem', letterSpacing: '-0.025em', lineHeight: 1.2 },
+    h3: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 700, fontSize: '1.65rem', letterSpacing: '-0.02em', lineHeight: 1.25 },
+    h4: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 700, fontSize: '1.38rem', letterSpacing: '-0.015em' },
+    h5: { fontFamily: '"Outfit", "Inter", sans-serif', fontWeight: 700, fontSize: '1.18rem', letterSpacing: '-0.01em' },
+    h6: { fontFamily: '"Outfit", "Inter", sans-serif', fontWeight: 600, fontSize: '1.02rem', letterSpacing: '-0.005em' },
+    body1: { fontSize: '0.885rem', lineHeight: 1.55 },
+    body2: { fontSize: '0.825rem', lineHeight: 1.45 },
+    subtitle1: { fontFamily: '"Outfit", "Inter", sans-serif', fontWeight: 600, fontSize: '0.94rem' },
     subtitle2: { fontWeight: 600, fontSize: '0.825rem' },
-    button: { textTransform: 'none', fontWeight: 600, letterSpacing: '0.01em', fontSize: '0.85rem' },
-    overline: { fontWeight: 700, letterSpacing: '0.06em', fontSize: '0.68rem', textTransform: 'uppercase' },
+    button: { fontFamily: '"Outfit", "Inter", sans-serif', textTransform: 'none', fontWeight: 600, letterSpacing: '0.01em', fontSize: '0.85rem' },
+    overline: { fontFamily: '"Outfit", "Inter", sans-serif', fontWeight: 700, letterSpacing: '0.08em', fontSize: '0.7rem', textTransform: 'uppercase' },
     caption: { letterSpacing: 0, fontSize: '0.75rem' },
   },
 };
@@ -86,27 +97,35 @@ const common = {
 const palettes = {
   dark: {
     mode: 'dark',
-    primary: { main: '#3b82f6', light: '#60a5fa', dark: '#1d4ed8' },
+    primary: { main: '#3b82f6', light: '#60a5fa', dark: '#1d4ed8', contrastText: '#ffffff' },
     secondary: { main: '#a855f7', light: '#c084fc', dark: '#7e22ce' },
-    success: { main: '#10b981' },
-    warning: { main: '#f59e0b' },
-    error: { main: '#ef4444' },
-    info: { main: '#3b82f6' },
-    background: { default: '#0b1120', paper: '#131a2b' },
-    text: { primary: '#f8fafc', secondary: '#94a3b8' },
-    divider: 'rgba(148, 163, 184, 0.16)',
+    success: { main: '#10b981', light: '#34d399', dark: '#059669' },
+    warning: { main: '#f59e0b', light: '#fbbf24', dark: '#d97706' },
+    error: { main: '#ef4444', light: '#f87171', dark: '#dc2626' },
+    info: { main: '#06b6d4', light: '#22d3ee', dark: '#0891b2' },
+    background: { 
+      default: '#080e1a', 
+      paper: '#0f172a',
+      subtle: 'rgba(255, 255, 255, 0.03)',
+    },
+    text: { primary: '#f8fafc', secondary: '#94a3b8', disabled: '#64748b' },
+    divider: 'rgba(255, 255, 255, 0.08)',
   },
   light: {
     mode: 'light',
-    primary: { main: '#2563eb', light: '#3b82f6', dark: '#1d4ed8' },
-    secondary: { main: '#7e22ce', light: '#a855f7', dark: '#581c87' },
-    success: { main: '#10b981' },
-    warning: { main: '#f59e0b' },
-    error: { main: '#ef4444' },
-    info: { main: '#2563eb' },
-    background: { default: '#f4f6f8', paper: '#ffffff' },
-    text: { primary: '#0f172a', secondary: '#64748b' },
-    divider: 'rgba(0, 0, 0, 0.08)',
+    primary: { main: '#2463eb', light: '#3b82f6', dark: '#1d4ed8', contrastText: '#ffffff' },
+    secondary: { main: '#7c3aed', light: '#a855f7', dark: '#581c87' },
+    success: { main: '#10b981', light: '#34d399', dark: '#059669' },
+    warning: { main: '#f59e0b', light: '#fbbf24', dark: '#d97706' },
+    error: { main: '#ef4444', light: '#f87171', dark: '#dc2626' },
+    info: { main: '#0284c7', light: '#38bdf8', dark: '#0369a1' },
+    background: { 
+      default: '#f3f6fc', 
+      paper: '#ffffff',
+      subtle: 'rgba(16, 35, 71, 0.02)',
+    },
+    text: { primary: '#102347', secondary: '#7b8aa6', disabled: '#94a3b8' },
+    divider: '#e3eaf5',
   },
 };
 
@@ -124,11 +143,6 @@ export function makeTheme(mode) {
             backgroundColor: palette.background.default,
             color: palette.text.primary,
           },
-          '*::-webkit-scrollbar': { width: 6, height: 6 },
-          '*::-webkit-scrollbar-thumb': {
-            backgroundColor: isDark ? 'rgba(148,163,184,0.2)' : 'rgba(0,0,0,0.2)',
-            borderRadius: 6,
-          },
         },
       },
       MuiPaper: {
@@ -139,8 +153,10 @@ export function makeTheme(mode) {
             backgroundColor: theme.palette.background.paper,
             borderRadius: 12,
             border: `1px solid ${theme.palette.divider}`,
-            boxShadow: isDark ? 'none' : '0 4px 20px rgba(0,0,0,0.03)',
-            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+            boxShadow: isDark 
+              ? '0 10px 30px -10px rgba(0, 0, 0, 0.5)' 
+              : '0 10px 30px -10px rgba(15, 23, 42, 0.05)',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
           }),
         },
       },
@@ -150,10 +166,13 @@ export function makeTheme(mode) {
             borderRadius: 12,
             border: `1px solid ${theme.palette.divider}`,
             backgroundImage: 'none',
-            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
             '&:hover': {
+              borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(37, 99, 235, 0.25)',
               transform: 'translateY(-2px)',
-              boxShadow: isDark ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.08)',
+              boxShadow: isDark 
+                ? '0 14px 34px -10px rgba(0, 0, 0, 0.65)' 
+                : '0 14px 34px -10px rgba(15, 23, 42, 0.09)',
             },
           }),
         },
@@ -162,9 +181,9 @@ export function makeTheme(mode) {
         defaultProps: { disableElevation: true },
         styleOverrides: {
           root: {
-            borderRadius: 8,
+            borderRadius: 9,
             fontWeight: 600,
-            transition: 'transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
+            transition: 'all 0.18s ease-in-out',
             '&:hover': {
               transform: 'translateY(-1px)',
             },
@@ -174,33 +193,48 @@ export function makeTheme(mode) {
               ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' 
               : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
             boxShadow: isDark 
-              ? '0 4px 12px rgba(59, 130, 246, 0.3)' 
-              : '0 4px 12px rgba(37, 99, 235, 0.25)',
+              ? '0 4px 14px rgba(59, 130, 246, 0.35)' 
+              : '0 4px 14px rgba(37, 99, 235, 0.25)',
             '&:hover': {
               boxShadow: isDark 
-                ? '0 6px 16px rgba(59, 130, 246, 0.4)' 
-                : '0 6px 16px rgba(37, 99, 235, 0.35)',
+                ? '0 6px 20px rgba(59, 130, 246, 0.45)' 
+                : '0 6px 20px rgba(37, 99, 235, 0.38)',
             },
           },
         },
       },
       MuiChip: {
         styleOverrides: {
-          root: { fontWeight: 600, borderRadius: 6 },
+          root: { fontWeight: 600, borderRadius: 8 },
           sizeSmall: { height: 24, fontSize: '0.725rem' },
         },
       },
       MuiTableCell: {
         styleOverrides: {
           root: {
-            padding: '12px 16px',
+            padding: '13px 18px',
             fontSize: '0.84rem',
+            borderBottom: `1px solid ${palette.divider}`,
           },
           head: {
+            fontFamily: '"Outfit", "Inter", sans-serif',
             fontWeight: 700,
-            fontSize: '0.75rem',
-            letterSpacing: '0.04em',
+            fontSize: '0.72rem',
+            letterSpacing: '0.06em',
             textTransform: 'uppercase',
+            color: palette.text.secondary,
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(248, 250, 252, 0.85)',
+            backdropFilter: 'blur(8px)',
+          },
+        },
+      },
+      MuiTableRow: {
+        styleOverrides: {
+          root: {
+            transition: 'background-color 0.15s ease',
+            '&.Mui-hover:hover': {
+              backgroundColor: isDark ? 'rgba(59, 130, 246, 0.05)' : 'rgba(37, 99, 235, 0.035)',
+            },
           },
         },
       },

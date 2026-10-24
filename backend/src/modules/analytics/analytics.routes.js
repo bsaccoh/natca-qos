@@ -10,8 +10,12 @@ const STAFF = ['SYSTEM_ADMIN', 'NATCA_ADMIN', 'NATCA_ANALYST'];
 
 router.use(authenticate);
 
-router.get('/overview', requireRole(...STAFF), asyncHandler(async (_req, res) => {
-  ok(res, await svc.getOverview());
+router.get('/overview', requireRole(...STAFF), asyncHandler(async (req, res) => {
+  ok(res, await svc.getOverview({
+    dateFrom:   req.query.dateFrom,
+    dateTo:     req.query.dateTo,
+    operatorId: req.query.operatorId ? Number(req.query.operatorId) : undefined,
+  }));
 }));
 
 router.get('/complaints', requireRole(...STAFF, 'OPERATOR_ADMIN'), operatorScope, asyncHandler(async (req, res) => {
@@ -22,20 +26,32 @@ router.get('/complaints', requireRole(...STAFF, 'OPERATOR_ADMIN'), operatorScope
   }));
 }));
 
-router.get('/advanced', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (_req, res) => {
-  ok(res, await svc.getAdvanced());
+router.get('/advanced', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (req, res) => {
+  ok(res, await svc.getAdvanced({
+    dateFrom:   req.query.dateFrom,
+    dateTo:     req.query.dateTo,
+    operatorId: req.query.operatorId ? Number(req.query.operatorId) : undefined,
+  }));
 }));
 
-router.get('/heatmap', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (_req, res) => {
-  ok(res, await svc.getHeatmap());
+router.get('/heatmap', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (req, res) => {
+  ok(res, await svc.getHeatmap({
+    dateFrom:   req.query.dateFrom,
+    dateTo:     req.query.dateTo,
+    operatorId: req.query.operatorId ? Number(req.query.operatorId) : undefined,
+  }));
 }));
 
 router.get('/operator-benchmark', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (_req, res) => {
   ok(res, await svc.getOperatorBenchmark());
 }));
 
-router.get('/qoe-heatmap', requireRole(...STAFF), asyncHandler(async (_req, res) => {
-  ok(res, await svc.getQoeHeatmap());
+router.get('/qoe-heatmap', requireRole(...STAFF), asyncHandler(async (req, res) => {
+  ok(res, await svc.getQoeHeatmap({
+    dateFrom:   req.query.dateFrom,
+    dateTo:     req.query.dateTo,
+    operatorId: req.query.operatorId ? Number(req.query.operatorId) : undefined,
+  }));
 }));
 
 router.get('/cell-performance', requireRole(...STAFF), asyncHandler(async (_req, res) => {
@@ -58,8 +74,19 @@ router.get('/sla-alerts', requireRole(...STAFF), asyncHandler(async (_req, res) 
   ok(res, await svc.getSlaAlerts());
 }));
 
-router.get('/operator-compliance', requireRole(...STAFF), asyncHandler(async (_req, res) => {
-  ok(res, await svc.getOperatorCompliance());
+router.get('/operator-compliance', requireRole(...STAFF), asyncHandler(async (req, res) => {
+  ok(res, await svc.getOperatorCompliance({
+    dateFrom: req.query.dateFrom,
+    dateTo:   req.query.dateTo,
+  }));
+}));
+
+router.get('/kyc-timeseries', requireRole(...STAFF), asyncHandler(async (req, res) => {
+  ok(res, await svc.getKycTimeSeries({
+    dateFrom:   req.query.dateFrom,
+    dateTo:     req.query.dateTo,
+    operatorId: req.query.operatorId ? Number(req.query.operatorId) : undefined,
+  }));
 }));
 
 router.get('/feedback', requireRole(...STAFF, 'OPERATOR_ADMIN'), asyncHandler(async (req, res) => {

@@ -397,47 +397,56 @@ class ComplaintsNotifier extends StateNotifier<List<ComplaintItem>> {
     if (offlineItems.isEmpty) return true;
 
     bool allSynced = true;
+    final synced = <int>[];
     for (var item in offlineItems) {
-      // Try to sync each
       try {
+        final districtId = _districtIdFromName(item.district);
         final body = <String, dynamic>{
-          'operator_id': item.operatorId,
-          'issue_type': item.issueType,
+          'operatorId': item.operatorId,
+          'issueType': item.issueType,
           'severity': 'MEDIUM',
-          'district': item.district,
-          'area_detail': item.areaDetail,
-          'lat': item.lat,
-          'lng': item.lng,
+          if (districtId != null) 'districtId': districtId,
+          'areaDetail': item.areaDetail,
+          'latitude': item.lat,
+          'longitude': item.lng,
           'description': item.description,
           'source': 'MOBILE',
           if (item.isBillingComplaint) ...{
-            'billing_sub_category': item.billingSubCategory,
-            'transaction_ref': item.transactionRef,
-            'disputed_amount': item.disputedAmount,
-            'transaction_date': item.transactionDate,
+            'billingSubCategory': item.billingSubCategory,
+            'transactionRef': item.transactionRef,
+            'disputedAmount': item.disputedAmount,
+            'transactionDate': item.transactionDate,
           },
         };
 
         final response = await apiClient.post('/complaints/submit', body, auth: true)
-            .timeout(const Duration(seconds: 10));
-        
-        if (response.statusCode != 200 && response.statusCode != 201) {
-          allSynced = false;
-        } else {
-          // Update local status
+            .timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          synced.add(item.id);
           state = state.map((e) {
             if (e.id == item.id) return e.copyWith(status: 'NEW');
             return e;
           }).toList();
+        } else {
+          allSynced = false;
         }
       } catch (_) {
         allSynced = false;
       }
     }
 
-    if (allSynced) {
+    if (synced.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('offline_complaints');
+      if (allSynced) {
+        await prefs.remove('offline_complaints');
+      } else {
+        final remaining = offlineItems
+            .where((item) => !synced.contains(item.id))
+            .map((item) => json.encode(item.toJson()))
+            .toList();
+        await prefs.setStringList('offline_complaints', remaining);
+      }
     }
     return allSynced;
   }

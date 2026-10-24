@@ -16,6 +16,9 @@ export async function submitKyc({
   idFrontPath, idBackPath, faceImagePath,
   idFrontData, idBackData, faceImageData,
   faceMatchScore,
+  livenessPassed,
+  livenessScore,
+  riskScore,
   source,
 }) {
   if (!phone) throw ApiError.badRequest('Phone is required');
@@ -29,14 +32,14 @@ export async function submitKyc({
        district_id, chiefdom_id, id_type, id_expiry_date,
        id_front_path, id_back_path, face_image_path,
        id_front_data, id_back_data, face_image_data,
-       face_match_score
+       face_match_score, liveness_passed, liveness_score, risk_score
      ) VALUES (
        :ref, :userId, :phone, :operatorId, :iccid, :nin,
        :firstName, :lastName, :dateOfBirth, :sex, :nationality, :address,
        :districtId, :chiefdomId, :idType, :idExpiryDate,
        :idFrontPath, :idBackPath, :faceImagePath,
        :idFrontData, :idBackData, :faceImageData,
-       :faceMatchScore
+       :faceMatchScore, :livenessPassed, :livenessScore, :riskScore
      ) RETURNING kyc_id, kyc_reference, status, created_at`,
     {
       ref, userId: userId || null, phone,
@@ -51,6 +54,9 @@ export async function submitKyc({
       idFrontData: idFrontData || null, idBackData: idBackData || null,
       faceImageData: faceImageData || null,
       faceMatchScore: faceMatchScore ?? null,
+      livenessPassed: livenessPassed !== undefined ? livenessPassed : null,
+      livenessScore: livenessScore !== undefined ? livenessScore : null,
+      riskScore: riskScore !== undefined ? riskScore : null,
     }
   );
 

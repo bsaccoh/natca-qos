@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/providers/state_providers.dart';
 import '../../core/models/app_models.dart';
+import '../../core/services/connectivity_service.dart';
 
 class ComplaintsScreen extends ConsumerStatefulWidget {
   const ComplaintsScreen({super.key});
@@ -13,9 +14,9 @@ class ComplaintsScreen extends ConsumerStatefulWidget {
 }
 
 class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
-  String _selectedFilter = "All"; // All, Open, In Progress, Resolved, Closed
+  String _selectedFilter = "All";
 
-  final List<String> _filters = ["All", "Open", "In Progress", "Resolved", "Closed"];
+  final List<String> _filters = ["All", "Queued", "Open", "In Progress", "Resolved", "Closed"];
 
   @override
   void initState() {
@@ -27,9 +28,11 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
   Widget build(BuildContext context) {
     final complaints = ref.watch(complaintsProvider);
 
-    // Apply active filter
+    final queuedCount = complaints.where((c) => c.status == 'QUEUED').length;
+
     final filteredComplaints = complaints.where((c) {
       if (_selectedFilter == "All") return true;
+      if (_selectedFilter == "Queued" && c.status == "QUEUED") return true;
       if (_selectedFilter == "Open" && c.status == "NEW") return true;
       if (_selectedFilter == "In Progress" && c.status == "IN_PROGRESS") return true;
       if (_selectedFilter == "Resolved" && c.status == "RESOLVED") return true;
@@ -57,7 +60,34 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
       ),
       body: Column(
         children: [
-          // Filter pills row
+          if (queuedCount > 0)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.warningOrange.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.warningOrange.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_off_rounded, color: AppColors.warningOrange, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '$queuedCount complaint${queuedCount == 1 ? '' : 's'} pending — will sync when online',
+                      style: AppTextStyles.small.copyWith(color: AppColors.warningOrange, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (ConnectivityService.instance.isOnline)
+                    GestureDetector(
+                      onTap: () => ref.read(complaintsProvider.notifier).syncOfflineComplaints(),
+                      child: const Icon(Icons.sync_rounded, color: AppColors.warningOrange, size: 20),
+                    ),
+                ],
+              ),
+            ),
           const SizedBox(height: 10),
           _buildFilterRow(),
           const SizedBox(height: 16),
@@ -225,6 +255,7 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
 
   Color _getStatusColor(String status) {
     switch (status) {
+      case 'QUEUED': return AppColors.warningOrange;
       case 'IN_PROGRESS': return AppColors.progressYellow;
       case 'RESOLVED': return AppColors.successGreen;
       case 'CLOSED': return AppColors.closedGrey;
@@ -234,6 +265,7 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
 
   String _getStatusLabel(String status) {
     switch (status) {
+      case 'QUEUED': return "Queued";
       case 'IN_PROGRESS': return "In Progress";
       case 'RESOLVED': return "Resolved";
       case 'CLOSED': return "Closed";

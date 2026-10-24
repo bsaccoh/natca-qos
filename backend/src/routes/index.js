@@ -17,6 +17,7 @@ import incidentsRoutes      from '../modules/incidents/incidents.routes.js';
 import statsRoutes          from '../modules/stats/stats.routes.js';
 import tariffsRoutes        from '../modules/tariffs/tariffs.routes.js';
 import adminRoutes          from '../modules/admin/admin.routes.js';
+import drivetestRoutes      from '../modules/drivetest/drivetest.routes.js';
 
 const router = Router();
 
@@ -35,6 +36,7 @@ router.use('/operator-portal', operatorPortalRoutes);
 router.use('/notifications',   notificationsRoutes);
 router.use('/analytics',       analyticsRoutes);
 router.use('/speed',           speedRoutes);
+router.use('/drivetest',       drivetestRoutes);
 router.use('/content',         contentRoutes);
 router.use('/incidents',       incidentsRoutes);
 router.use('/stats',           statsRoutes);

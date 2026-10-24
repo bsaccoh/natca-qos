@@ -4,6 +4,7 @@ import { ColorModeProvider } from './theme/ColorMode.jsx';
 import { AuthProvider }      from './auth/AuthContext.jsx';
 import App from './App.jsx';
 import './index.css';
+import './styles/qoe-dashboard.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

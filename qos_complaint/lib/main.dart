@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/router/app_router.dart';
 import 'app/theme/app_theme.dart';
 import 'app/providers/state_providers.dart';
-void main() {
+import 'core/services/connectivity_service.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ConnectivityService.instance.init();
   runApp(
     const ProviderScope(
       child: MyApp(),
@@ -15,11 +18,31 @@ void main() {
 const _fontFamily = 'Inter';
 const _fallback = ['SF Pro Display', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'sans-serif'];
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    ConnectivityService.instance.onBackOnline = _onConnectivityRestored;
+  }
+
+  void _onConnectivityRestored() {
+    ref.read(connectivityOnlineProvider.notifier).state = true;
+    ref.read(complaintsProvider.notifier).syncOfflineComplaints().then((allSynced) {
+      if (allSynced) {
+        ref.read(complaintsProvider.notifier).fetchComplaints();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = ref.watch(themeProvider);
 
     return MaterialApp.router(

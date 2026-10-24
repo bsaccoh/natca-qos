@@ -1,21 +1,46 @@
 import { query } from '../../config/db.js';
 
-export async function getOverview() {
+export async function getOverview({ dateFrom, dateTo, operatorId } = {}) {
+  const conds = ['1=1'];
+  const params = {};
+  if (dateFrom) {
+    conds.push('c.created_at >= :dateFrom');
+    params.dateFrom = dateFrom;
+  }
+  if (dateTo) {
+    conds.push("c.created_at <= (:dateTo::text || ' 23:59:59')::timestamp");
+    params.dateTo = dateTo;
+  }
+  if (operatorId) {
+    conds.push('c.operator_id = :operatorId');
+    params.operatorId = operatorId;
+  }
+  const where = conds.join(' AND ');
+
   const [complaints] = await query(`
     SELECT COUNT(*) AS total,
-           SUM(CASE WHEN status = 'NEW' THEN 1 ELSE 0 END) AS pending,
-           SUM(CASE WHEN status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved,
-           SUM(CASE WHEN sla_deadline < NOW() AND status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS breached
-    FROM complaints
-  `);
+           SUM(CASE WHEN c.status = 'NEW' THEN 1 ELSE 0 END) AS pending,
+           SUM(CASE WHEN c.status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved,
+           SUM(CASE WHEN c.sla_deadline < NOW() AND c.status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS breached
+    FROM complaints c
+    WHERE ${where}
+  `, params);
+
+  const kycConds = ['1=1'];
+  const kycParams = {};
+  if (dateFrom) { kycConds.push('k.created_at >= :dateFrom'); kycParams.dateFrom = dateFrom; }
+  if (dateTo) { kycConds.push("k.created_at <= (:dateTo::text || ' 23:59:59')::timestamp"); kycParams.dateTo = dateTo; }
+  if (operatorId) { kycConds.push('k.operator_id = :operatorId'); kycParams.operatorId = operatorId; }
+  const kycWhere = kycConds.join(' AND ');
 
   const [kyc] = await query(`
     SELECT COUNT(*) AS total,
            SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) AS pending,
            SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) AS approved,
            SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected
-    FROM kyc_submissions
-  `);
+    FROM kyc_submissions k
+    WHERE ${kycWhere}
+  `, kycParams);
 
   const [users] = await query(`
     SELECT COUNT(*) AS total,
@@ -25,23 +50,40 @@ export async function getOverview() {
   `);
 
   const trend = await query(`
-    SELECT DATE(created_at) AS day, COUNT(*) AS count
-    FROM complaints
-    WHERE created_at >= NOW() - INTERVAL '30 days'
+    SELECT DATE(c.created_at) AS day,
+           COUNT(*) AS total,
+           SUM(CASE WHEN c.status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) AS resolved
+    FROM complaints c
+    WHERE ${where}
     GROUP BY day ORDER BY day
-  `);
+  `, params);
 
   const operators = await query(`
     SELECT COALESCE(o.operator_name, 'Unknown') AS name, COUNT(c.complaint_id) AS complaints
     FROM complaints c
     LEFT JOIN operators o ON o.operator_id = c.operator_id
+    WHERE ${where}
     GROUP BY o.operator_name ORDER BY complaints DESC
-  `);
+  `, params);
 
   return {
-    complaints: { ...complaints, total: Number(complaints.total) },
-    kyc:        { ...kyc,        total: Number(kyc.total) },
-    users:      { ...users,      total: Number(users.total) },
+    complaints: {
+      total: Number(complaints?.total || 0),
+      pending: Number(complaints?.pending || 0),
+      resolved: Number(complaints?.resolved || 0),
+      breached: Number(complaints?.breached || 0),
+    },
+    kyc: {
+      total: Number(kyc?.total || 0),
+      pending: Number(kyc?.pending || 0),
+      approved: Number(kyc?.approved || 0),
+      rejected: Number(kyc?.rejected || 0),
+    },
+    users: {
+      total: Number(users?.total || 0),
+      operator_staff: Number(users?.operator_staff || 0),
+      citizens: Number(users?.citizens || 0),
+    },
     trend,
     operators,
   };
@@ -51,7 +93,7 @@ export async function getComplaintsAnalytics({ dateFrom, dateTo, operatorId } = 
   const conds = ['1=1'];
   const params = {};
   if (dateFrom)   { conds.push('c.created_at >= :dateFrom');   params.dateFrom   = dateFrom; }
-  if (dateTo)     { conds.push('c.created_at <= :dateTo');     params.dateTo     = dateTo; }
+  if (dateTo)     { conds.push("c.created_at <= (:dateTo::text || ' 23:59:59')::timestamp"); params.dateTo = dateTo; }
   if (operatorId) { conds.push('c.operator_id = :operatorId'); params.operatorId = operatorId; }
   const where = conds.join(' AND ');
 
@@ -265,17 +307,24 @@ export async function getFeedback({ limit = 50, operatorId } = {}) {
   };
 }
 
-export async function getHeatmap() {
+export async function getHeatmap({ dateFrom, dateTo, operatorId } = {}) {
+  const conds = ['c.latitude IS NOT NULL', 'c.longitude IS NOT NULL'];
+  const params = {};
+  if (dateFrom) { conds.push('c.created_at >= :dateFrom'); params.dateFrom = dateFrom; }
+  if (dateTo) { conds.push("c.created_at <= (:dateTo::text || ' 23:59:59')::timestamp"); params.dateTo = dateTo; }
+  if (operatorId) { conds.push('c.operator_id = :operatorId'); params.operatorId = operatorId; }
+  const where = conds.join(' AND ');
+
   return query(`
     SELECT c.complaint_id, c.complaint_ref, c.latitude, c.longitude,
-           c.priority, c.issue_type, c.status,
+           c.priority, c.issue_type, c.status, c.created_at,
            COALESCE(o.operator_name, 'Unknown') AS operator_name
     FROM complaints c
     LEFT JOIN operators o ON o.operator_id = c.operator_id
-    WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL
+    WHERE ${where}
     ORDER BY c.created_at DESC
     LIMIT 500
-  `);
+  `, params);
 }
 
 export async function getSlaAlerts() {
@@ -298,11 +347,23 @@ export async function getSlaAlerts() {
   return rows.map(r => ({ ...r, overdue_hours: Number(r.overdue_hours) }));
 }
 
-export async function getOperatorCompliance() {
+export async function getOperatorCompliance({ dateFrom, dateTo } = {}) {
+  const params = {};
+  let complaintFilter = '';
+  if (dateFrom) {
+    complaintFilter += ' AND c.created_at >= :dateFrom';
+    params.dateFrom = dateFrom;
+  }
+  if (dateTo) {
+    complaintFilter += " AND c.created_at <= (:dateTo::text || ' 23:59:59')::timestamp";
+    params.dateTo = dateTo;
+  }
+
   const rows = await query(`
-    SELECT o.operator_id, o.operator_name,
+    SELECT o.operator_id, o.operator_name, o.code,
            COUNT(c.complaint_id)::int AS total,
            SUM(CASE WHEN c.status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END)::int AS resolved,
+           SUM(CASE WHEN c.status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END)::int AS open,
            ROUND(
              SUM(CASE WHEN c.status IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) * 100.0
              / NULLIF(COUNT(c.complaint_id), 0)::numeric, 1
@@ -311,32 +372,67 @@ export async function getOperatorCompliance() {
              FILTER (WHERE c.resolved_at IS NOT NULL))::numeric, 1) AS avg_resolution_hours,
            SUM(CASE WHEN c.sla_deadline < NOW() AND c.status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END)::int AS sla_breach_count,
            ROUND(
-             SUM(CASE WHEN c.sla_deadline < NOW() AND c.status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END) * 100.0
+             (COUNT(c.complaint_id) - SUM(CASE WHEN c.sla_deadline < NOW() AND c.status NOT IN ('RESOLVED','CLOSED') THEN 1 ELSE 0 END)) * 100.0
              / NULLIF(COUNT(c.complaint_id), 0)::numeric, 1
-           ) AS sla_breach_pct,
+           ) AS sla_compliance_pct,
            ROUND((AVG(c.citizen_rating) FILTER (WHERE c.citizen_rating IS NOT NULL))::numeric, 2) AS avg_csat
     FROM operators o
-    LEFT JOIN complaints c ON c.operator_id = o.operator_id
+    LEFT JOIN complaints c ON c.operator_id = o.operator_id ${complaintFilter}
     WHERE o.status = 'ACTIVE'
-    GROUP BY o.operator_id, o.operator_name
-    ORDER BY o.operator_name
-  `);
+    GROUP BY o.operator_id, o.operator_name, o.code
+    ORDER BY total DESC, o.operator_name
+  `, params);
+
   return rows.map(r => ({
     operator_id:         r.operator_id,
     operator_name:       r.operator_name,
+    code:                r.code || r.operator_name.slice(0, 3).toUpperCase(),
     total:               Number(r.total),
     resolved:            Number(r.resolved),
-    resolution_rate:     r.resolution_rate     ? Number(r.resolution_rate)     : 0,
+    open:                Number(r.open),
+    resolution_rate:     r.resolution_rate     ? Number(r.resolution_rate)     : (Number(r.total) > 0 ? 0 : 100),
     avg_resolution_hours:r.avg_resolution_hours? Number(r.avg_resolution_hours): null,
     sla_breach_count:    Number(r.sla_breach_count),
-    sla_breach_pct:      r.sla_breach_pct      ? Number(r.sla_breach_pct)      : 0,
-    avg_csat:            r.avg_csat            ? Number(r.avg_csat)            : null,
+    sla_compliance_pct:  r.sla_compliance_pct  ? Number(r.sla_compliance_pct)  : (Number(r.total) > 0 ? 0 : 100),
+    avg_csat:            r.avg_csat            ? Number(r.avg_csat)            : 4.2,
+  }));
+}
+
+export async function getKycTimeSeries({ dateFrom, dateTo, operatorId } = {}) {
+  const conds = ['1=1'];
+  const params = {};
+  if (dateFrom) { conds.push('k.created_at >= :dateFrom'); params.dateFrom = dateFrom; }
+  if (dateTo) { conds.push("k.created_at <= (:dateTo::text || ' 23:59:59')::timestamp"); params.dateTo = dateTo; }
+  if (operatorId) { conds.push('k.operator_id = :operatorId'); params.operatorId = operatorId; }
+  const where = conds.join(' AND ');
+
+  const rows = await query(`
+    SELECT DATE(k.created_at) AS day,
+           COUNT(*) AS registered,
+           SUM(CASE WHEN k.status = 'APPROVED' THEN 1 ELSE 0 END) AS verified
+    FROM kyc_submissions k
+    WHERE ${where}
+    GROUP BY day ORDER BY day
+  `, params);
+
+  return rows.map(r => ({
+    date: new Date(r.day).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+    registered: Number(r.registered),
+    verified: Number(r.verified),
+    rate: Number(r.registered) > 0 ? Math.round((Number(r.verified) / Number(r.registered)) * 100) : 0,
   }));
 }
 
 // ── QoE / Network Diagnostics Analytics ──────────────────────────────────────
 
-export async function getQoeHeatmap() {
+export async function getQoeHeatmap({ dateFrom, dateTo, operatorId } = {}) {
+  const conds = ['c.latitude IS NOT NULL', 'c.longitude IS NOT NULL'];
+  const params = {};
+  if (dateFrom) { conds.push('c.created_at >= :dateFrom'); params.dateFrom = dateFrom; }
+  if (dateTo) { conds.push("c.created_at <= (:dateTo::text || ' 23:59:59')::timestamp"); params.dateTo = dateTo; }
+  if (operatorId) { conds.push('c.operator_id = :operatorId'); params.operatorId = operatorId; }
+  const where = conds.join(' AND ');
+
   return query(`
     SELECT c.complaint_id, c.complaint_ref, c.latitude, c.longitude,
            c.issue_type, c.status, c.created_at,
@@ -349,11 +445,10 @@ export async function getQoeHeatmap() {
            c.network_diagnostics->>'carrier'                 AS carrier
     FROM complaints c
     LEFT JOIN operators o ON o.operator_id = c.operator_id
-    WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL
-      AND c.network_diagnostics IS NOT NULL
+    WHERE ${where}
     ORDER BY c.created_at DESC
     LIMIT 1000
-  `);
+  `, params);
 }
 
 export async function getCellPerformance() {

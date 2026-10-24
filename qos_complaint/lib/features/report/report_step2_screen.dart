@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/providers/state_providers.dart';
 import '../../core/services/api_client.dart';
@@ -50,18 +51,35 @@ class _ReportStep2ScreenState extends ConsumerState<ReportStep2Screen> with Sing
       if (response.statusCode == 200 && mounted) {
         final data = json.decode(response.body);
         final rows = (data['data'] ?? data) as List;
+        final parsed = rows.map<Map<String, dynamic>>((r) => <String, dynamic>{
+          'district_id': r['district_id'],
+          'name': r['name'],
+          'province': r['province'] ?? '',
+        }).toList();
         setState(() {
-          _districts = rows.map<Map<String, dynamic>>((r) => <String, dynamic>{
-            'district_id': r['district_id'],
-            'name': r['name'],
-            'province': r['province'] ?? '',
-          }).toList();
+          _districts = parsed;
           _loadingDistricts = false;
         });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('cached_districts', json.encode(parsed));
       } else {
-        if (mounted) setState(() => _loadingDistricts = false);
+        await _loadCachedDistricts();
       }
     } catch (_) {
+      await _loadCachedDistricts();
+    }
+  }
+
+  Future<void> _loadCachedDistricts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString('cached_districts');
+    if (cached != null && mounted) {
+      final rows = (json.decode(cached) as List).cast<Map<String, dynamic>>();
+      setState(() {
+        _districts = rows;
+        _loadingDistricts = false;
+      });
+    } else {
       if (mounted) setState(() => _loadingDistricts = false);
     }
   }
@@ -381,7 +399,7 @@ class _ReportStep2ScreenState extends ConsumerState<ReportStep2Screen> with Sing
         height: 52,
         child: ElevatedButton(
           onPressed: () {
-            if (_selectedDistrictId == null && _districts.isNotEmpty) {
+            if (_selectedDistrictId == null && _districts.isNotEmpty && !_loadingDistricts) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Please select your district')),
               );
