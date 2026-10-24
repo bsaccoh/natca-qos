@@ -40,29 +40,48 @@ api.interceptors.response.use(
   (r) => r,
   async (err) => {
     const orig = err.config;
+    // Do not attempt refresh on auth endpoints (login, refresh, logout)
+    if (!orig || orig.url?.includes('/auth/refresh') || orig.url?.includes('/auth/login')) {
+      return Promise.reject(err);
+    }
+
     if (err.response?.status === 401 && !orig._retry && tokenStore.refresh) {
+      orig._retry = true;
       if (!refreshing) {
-        refreshing = api
-          .post('/auth/refresh', { refreshToken: tokenStore.refresh })
+        const refreshEndpoint = (api.defaults.baseURL || '/api/v1').replace(/\/$/, '') + '/auth/refresh';
+        refreshing = axios
+          .post(refreshEndpoint, { refreshToken: tokenStore.refresh })
           .then((r) => {
-            tokenStore.set({
-              accessToken: r.data?.data?.accessToken || r.data?.accessToken,
-              refreshToken: tokenStore.refresh,
-            });
+            const newAccess = r.data?.data?.accessToken || r.data?.accessToken;
+            if (newAccess) {
+              tokenStore.set({
+                accessToken: newAccess,
+                refreshToken: tokenStore.refresh,
+              });
+              return newAccess;
+            }
+            throw new Error('Missing access token');
           })
-          .catch(() => {
+          .catch((refreshErr) => {
             tokenStore.clear();
-            if (window.location.pathname !== '/login') {
+            if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
               window.location.href = '/login';
             }
+            return Promise.reject(refreshErr);
           })
           .finally(() => {
             refreshing = null;
           });
       }
-      await refreshing;
-      orig._retry = true;
-      return api(orig);
+
+      try {
+        const newAccess = await refreshing;
+        orig.headers = orig.headers || {};
+        orig.headers.Authorization = `Bearer ${newAccess}`;
+        return api(orig);
+      } catch (refreshErr) {
+        return Promise.reject(refreshErr);
+      }
     }
     return Promise.reject(err);
   }
